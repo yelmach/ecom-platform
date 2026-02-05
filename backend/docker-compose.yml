@@ -1,0 +1,27 @@
+services:
+  # ----------------------------
+  # DATABASE (MongoDB)
+  # ----------------------------
+  mongo:
+    image: mongo:latest
+    container_name: ecom-mongo
+    ports:
+      - "${MONGO_PORT}:27017" # Maps localhost:27017 -> Container:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ecom-network
+
+# ----------------------------
+# NETWORKS & VOLUMES
+# ----------------------------
+networks:
+  ecom-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
