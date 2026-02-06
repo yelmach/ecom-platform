@@ -1,7 +1,9 @@
 server:
-  port: ${EUREKA_PORT:8761}
+  port: ${EUREKA_PORT}
 
 spring:
+  config:
+    import: optional:file:../.env[.properties]
   application:
     name: discovery-server
 
@@ -13,6 +15,11 @@ eureka:
     fetch-registry: false
     service-url:
       defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # In Dev: Set false so if you kill a service, it disappears instantly.
+    enable-self-preservation: false
+    # How often (in ms) the server scans for dead services to remove them.
+    eviction-interval-timer-in-ms: 5000
 
 management:
   endpoints:
@@ -22,11 +29,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-eureka:
-  server:
-    # In Dev: Set false so if you kill a service, it disappears instantly.
-    enable-self-preservation: false
-    
-    # How often (in ms) the server scans for dead services to remove them.
-    eviction-interval-timer-in-ms: 5000

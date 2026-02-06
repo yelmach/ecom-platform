@@ -2,6 +2,8 @@ server:
   port: ${PRODUCT_SERVICE_PORT}
 
 spring:
+  config:
+    import: optional:file:../.env[.properties]
   application:
     name: product-service
   data:

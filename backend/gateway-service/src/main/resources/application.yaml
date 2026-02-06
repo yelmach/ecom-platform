@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT}
 
 spring:
+  config:
+    import: optional:file:../.env[.properties]
   application:
     name: gateway-service
 
