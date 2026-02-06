@@ -6,6 +6,12 @@ spring:
     import: optional:file:../.env[.properties]
   application:
     name: gateway-service
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+          lower-case-service-id: true
 
 eureka:
   client:
