@@ -1,1 +1,100 @@
-<p>register works!</p>
+<div class="register-page">
+  <div class="form-panel">
+    <div class="form-card">
+      <h2>Create Account</h2>
+      <p class="subtitle">join our marketplace today.</p>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+        <!-- Role selector -->
+        <div class="role-selector">
+          <button
+            type="button"
+            class="role-card"
+            [class.selected]="registerForm.controls.role.value === 'client'"
+            (click)="selectRole('client')"
+          >
+            <mat-icon>shopping_cart</mat-icon>
+            <span>Client</span>
+          </button>
+          <button
+            type="button"
+            class="role-card"
+            [class.selected]="registerForm.controls.role.value === 'seller'"
+            (click)="selectRole('seller')"
+          >
+            <mat-icon>storefront</mat-icon>
+            <span>Seller</span>
+          </button>
+        </div>
+
+        <!-- username -->
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput formControlName="username" />
+          <mat-icon matSuffix>person</mat-icon>
+          <mat-error>{{ getErrorMessage('username') }}</mat-error>
+        </mat-form-field>
+
+        <!-- email -->
+        <mat-form-field appearance="outline">
+          <mat-label>Email Address</mat-label>
+          <input matInput formControlName="email" type="email" />
+          <mat-icon matSuffix>email</mat-icon>
+          <mat-error>{{ getErrorMessage('email') }}</mat-error>
+        </mat-form-field>
+
+        <!-- password -->
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            [type]="hidePassword() ? 'password' : 'text'"
+          />
+          <button mat-icon-button matSuffix type="button" (click)="togglePasswordVisibility()">
+            <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          <mat-error>{{ getErrorMessage('password') }}</mat-error>
+        </mat-form-field>
+
+        <!-- Profile picture -->
+        <div class="profile-upload">
+          <span class="upload-label">PROFILE PICTURE</span>
+          <div class="upload-row">
+            <div class="avatar-preview" (click)="fileInput.click()">
+              @if (profilePreview()) {
+                <img [src]="profilePreview()" alt="Profile preview" />
+              } @else {
+                <mat-icon>photo_camera</mat-icon>
+              }
+            </div>
+            <div class="upload-info">
+              <button type="button" class="upload-link" (click)="fileInput.click()">
+                Upload photo
+              </button>
+              <span class="upload-hint">Recommended: Square JPG, PNG</span>
+            </div>
+            <input
+              #fileInput
+              type="file"
+              hidden
+              accept="image/jpeg,image/png"
+              (change)="onFileSelected($event)"
+            />
+          </div>
+        </div>
+
+        <button
+          matButton="filled"
+          type="submit"
+          class="submit-btn"
+          [disabled]="registerForm.invalid || registerForm.untouched ? true : false"
+        >
+          Create Account
+        </button>
+      </form>
+
+      <p class="login-link">Already have an account? <a routerLink="/login">Log in</a></p>
+    </div>
+  </div>
+</div>
