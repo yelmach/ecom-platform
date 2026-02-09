@@ -18,9 +18,7 @@ public record RegisterRequest(
         @Size(min = 6, max = 100)
         String password,
         @NotNull(message = "You must define your role")
-        Role role,
-
-        String avatarUrl
-) {
+        Role role
+        ) {
 
 }
