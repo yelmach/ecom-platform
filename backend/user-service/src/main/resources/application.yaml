@@ -19,5 +19,5 @@ eureka:
       defaultZone: http://${EUREKA_HOST}:${EUREKA_PORT}/eureka/
 
 jwt:
-  secret: ${JWT_SECRET}
+  private-key: ${JWT_PRIVATE_KEY_PATH}
   expiration: ${JWT_EXPIRATION}
