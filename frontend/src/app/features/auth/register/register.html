@@ -57,33 +57,6 @@
           <mat-error>{{ getErrorMessage('password') }}</mat-error>
         </mat-form-field>
 
-        <!-- Profile picture -->
-        <div class="profile-upload">
-          <span class="upload-label">Profile Picture</span>
-          <div class="upload-row">
-            <div class="avatar-preview" (click)="fileInput.click()">
-              @if (profilePreview()) {
-                <img [src]="profilePreview()" alt="Profile preview" />
-              } @else {
-                <mat-icon>photo_camera</mat-icon>
-              }
-            </div>
-            <div class="upload-info">
-              <button type="button" class="upload-link" (click)="fileInput.click()">
-                Upload photo
-              </button>
-              <span class="upload-hint">Recommended: Square JPG, PNG</span>
-            </div>
-            <input
-              #fileInput
-              type="file"
-              hidden
-              accept="image/jpeg,image/png"
-              (change)="onFileSelected($event)"
-            />
-          </div>
-        </div>
-
         <button
           matButton="filled"
           type="submit"

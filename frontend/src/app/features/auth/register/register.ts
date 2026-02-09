@@ -21,7 +21,6 @@ import { MatButtonModule } from '@angular/material/button';
 })
 export class Register {
   readonly hidePassword = signal(true);
-  readonly profilePreview = signal<string | null>(null);
 
   readonly registerForm = new FormGroup({
     role: new FormControl<'client' | 'seller'>('client', { nonNullable: true }),
@@ -37,16 +36,6 @@ export class Register {
 
   togglePasswordVisibility(): void {
     this.hidePassword.update((hide) => !hide);
-  }
-
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => this.profilePreview.set(reader.result as string);
-    reader.readAsDataURL(file);
   }
 
   onSubmit(): void {
