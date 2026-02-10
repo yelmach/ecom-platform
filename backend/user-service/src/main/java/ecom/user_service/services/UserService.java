@@ -4,6 +4,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import ecom.user_service.dto.request.UpdateRequest;
+import ecom.user_service.exceptions.EmailAlreadyExistsException;
+import ecom.user_service.exceptions.UserNotFoundException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     public User UpdateProfile(String userId, UpdateRequest updateRequest) {
-        User user = userRepository.findById(userId).orElseThrow(null);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         // Update lastName
         if (updateRequest.username() != null && !updateRequest.username().trim().isEmpty()) {
@@ -28,7 +31,7 @@ public class UserService {
             String newEmail = updateRequest.email().trim();
             if (!user.getEmail().equals(newEmail)) {
                 if (userRepository.existByEmail(newEmail)) {
-                    return null;//handle exception
+                    throw new EmailAlreadyExistsException("Email already exists");
                 }
                 user.setEmail(newEmail);
             }

@@ -3,12 +3,15 @@ package ecom.user_service.services;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import ecom.user_service.dto.request.LoginRequest;
 import ecom.user_service.dto.request.RegisterRequest;
 import ecom.user_service.dto.response.AuthResponse;
+import ecom.user_service.exceptions.EmailAlreadyExistsException;
+import ecom.user_service.exceptions.InvalidCredentialsException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +27,7 @@ public class AuthService {
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existByEmail(request.email())) {
-            return null; //handle exception
+            throw new EmailAlreadyExistsException("Email already exists");
         }
 
         User newUser = new User();
@@ -39,10 +42,15 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
-        User user = (User) authentication.getPrincipal();
-        String token = jwtService.generateToken(user);
-        return new AuthResponse(token, user.getEmail(), user.getRole());
+            User user = (User) authentication.getPrincipal();
+            String token = jwtService.generateToken(user);
+            return new AuthResponse(token, user.getEmail(), user.getRole());
+        } catch (AuthenticationException ex) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
     }
 }

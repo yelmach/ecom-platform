@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ecom.user_service.dto.request.UpdateRequest;
 import ecom.user_service.dto.response.UserResponse;
+import ecom.user_service.exceptions.UserNotFoundException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import ecom.user_service.services.UserService;
@@ -27,7 +28,8 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<UserResponse> getCurrentUser(@RequestHeader("X-User-Id") String userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> null); // handle exception
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         return ResponseEntity.status(HttpStatus.OK).body(UserResponse.fromEntity(user));
     }
