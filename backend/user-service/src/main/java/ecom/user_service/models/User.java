@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
@@ -30,6 +32,7 @@ public class User implements UserDetails {
 
     @NotBlank(message = "Username is required")
     @Pattern(regexp = "^[a-zA-Z0-9]{4,15}$", message = "username must be between 4 and 15 characters and contain only characters and numbers")
+    @Indexed(unique = true)
     private String username;
 
     @Email(message = "Invalid Email forrmat")
@@ -46,8 +49,10 @@ public class User implements UserDetails {
 
     private String avatarUrl;
 
+    @CreatedDate
     private LocalDateTime createdAt;
 
+    @LastModifiedDate
     private LocalDateTime UpdatedAt;
 
     @Override

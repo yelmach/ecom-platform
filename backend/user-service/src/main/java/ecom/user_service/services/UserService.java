@@ -21,7 +21,6 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        // Update lastName
         if (updateRequest.username() != null && !updateRequest.username().trim().isEmpty()) {
             user.setUsername(updateRequest.username().trim());
         }
@@ -40,6 +39,10 @@ public class UserService {
         // Update password
         if (updateRequest.password() != null && !updateRequest.password().trim().isEmpty()) {
             user.setPassword(passwordEncoder.encode(updateRequest.password()));
+        }
+
+        if (updateRequest.role() != null && !updateRequest.role().toString().trim().isEmpty()) {
+            user.setRole(updateRequest.role());
         }
 
         return userRepository.save(user);
