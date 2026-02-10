@@ -4,6 +4,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import ecom.user_service.dto.request.UpdateRequest;
+import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.UserNotFoundException;
 import ecom.user_service.models.User;
@@ -17,7 +18,12 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public User UpdateProfile(String userId, UpdateRequest updateRequest) {
+    public UserResponse getCurrentUser(String userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User Not Found"));
+        return UserResponse.fromEntity(user);
+    }
+
+    public UserResponse UpdateProfile(String userId, UpdateRequest updateRequest) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
@@ -45,6 +51,7 @@ public class UserService {
             user.setRole(updateRequest.role());
         }
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        return UserResponse.fromEntity(savedUser);
     }
 }
