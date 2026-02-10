@@ -30,7 +30,7 @@ public class UserService {
         if (updateRequest.email() != null && !updateRequest.email().trim().isEmpty()) {
             String newEmail = updateRequest.email().trim();
             if (!user.getEmail().equals(newEmail)) {
-                if (userRepository.existByEmail(newEmail)) {
+                if (userRepository.existsByEmail(newEmail)) {
                     throw new EmailAlreadyExistsException("Email already exists");
                 }
                 user.setEmail(newEmail);
