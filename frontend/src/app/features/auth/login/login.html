@@ -29,10 +29,14 @@
           matButton="filled"
           type="submit"
           class="submit-btn"
-          [disabled]="loginForm.invalid || loginForm.untouched"
+          [disabled]="isSubmitting() || loginForm.invalid || loginForm.untouched"
         >
-          Sign In
+          {{ isSubmitting() ? 'Signing In...' : 'Sign In' }}
         </button>
+
+        @if (submitError()) {
+          <p class="form-error">{{ submitError() }}</p>
+        }
       </form>
 
       <p class="register-link">Don't have an account? <a routerLink="/register">Sign up</a></p>

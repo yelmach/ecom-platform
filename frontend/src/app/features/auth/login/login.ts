@@ -1,10 +1,13 @@
-import { Component, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, inject, signal } from '@angular/core';
 import { ReactiveFormsModule, FormGroup, FormControl, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { finalize } from 'rxjs';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -21,11 +24,22 @@ import { MatButtonModule } from '@angular/material/button';
   styleUrl: './login.scss',
 })
 export class Login {
+  private authService = inject(AuthService);
+  private router = inject(Router);
+
   readonly hidePassword = signal(true);
+  readonly isSubmitting = signal(false);
+  readonly submitError = signal('');
 
   readonly loginForm = new FormGroup({
-    email: new FormControl('', [Validators.required, Validators.email]),
-    password: new FormControl('', [Validators.required]),
+    email: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.email],
+    }),
+    password: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
   });
 
   fieldErrors = signal<{ [key: string]: string }>({});
@@ -35,12 +49,26 @@ export class Login {
   }
 
   onSubmit(): void {
+    this.fieldErrors.set({});
+    this.submitError.set('');
+
     if (this.loginForm.invalid) {
-      this.loginForm.markAllAsTouched();
       return;
     }
 
-    console.log('Login Data:', this.loginForm.value);
+    const payload = this.loginForm.getRawValue();
+    this.isSubmitting.set(true);
+
+    this.authService
+      .login(payload)
+      .pipe(finalize(() => this.isSubmitting.set(false)))
+      .subscribe({
+        next: (user) => {
+          const redirectPath = user.role === 'SELLER' ? '/seller' : '/shop';
+          void this.router.navigateByUrl(redirectPath);
+        },
+        error: (error: HttpErrorResponse) => this.handleSubmitError(error),
+      });
   }
 
   getErrorMessage(fieldName: string): string {
@@ -69,5 +97,35 @@ export class Login {
     }
 
     return '';
+  }
+
+  private handleSubmitError(error: HttpErrorResponse): void {
+    if (error.error?.details) {
+      const details = error.error.details;
+      this.fieldErrors.set(details);
+
+      Object.keys(details).forEach((fieldName) => {
+        const control = this.loginForm.get(fieldName);
+        if (control) {
+          control.setErrors({ backend: details[fieldName] });
+          control.markAsTouched();
+        }
+      });
+      return;
+    }
+
+    if (error.error?.message) {
+      const message = error.error.message;
+
+      this.submitError.set(message);
+
+      return;
+    }
+
+    if (error.error?.error) {
+      this.submitError.set(error.error.error);
+    } else {
+      this.submitError.set('Login failed');
+    }
   }
 }

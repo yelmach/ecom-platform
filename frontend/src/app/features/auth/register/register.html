@@ -10,8 +10,8 @@
           <button
             type="button"
             class="role-card"
-            [class.selected]="registerForm.controls.role.value === 'client'"
-            (click)="selectRole('client')"
+            [class.selected]="registerForm.controls.role.value === 'CLIENT'"
+            (click)="selectRole('CLIENT')"
           >
             <mat-icon>shopping_cart</mat-icon>
             <span>Client</span>
@@ -19,8 +19,8 @@
           <button
             type="button"
             class="role-card"
-            [class.selected]="registerForm.controls.role.value === 'seller'"
-            (click)="selectRole('seller')"
+            [class.selected]="registerForm.controls.role.value === 'SELLER'"
+            (click)="selectRole('SELLER')"
           >
             <mat-icon>storefront</mat-icon>
             <span>Seller</span>
@@ -61,10 +61,16 @@
           matButton="filled"
           type="submit"
           class="submit-btn"
-          [disabled]="registerForm.invalid || registerForm.untouched ? true : false"
+          [disabled]="
+            isSubmitting() || registerForm.invalid || registerForm.untouched ? true : false
+          "
         >
-          Create Account
+          {{ isSubmitting() ? 'Creating...' : 'Create Account' }}
         </button>
+
+        @if (submitError()) {
+          <p class="form-error">{{ submitError() }}</p>
+        }
       </form>
 
       <p class="login-link">Already have an account? <a routerLink="/login">Log in</a></p>
