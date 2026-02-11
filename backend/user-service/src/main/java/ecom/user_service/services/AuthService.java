@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import ecom.user_service.dto.request.LoginRequest;
 import ecom.user_service.dto.request.RegisterRequest;
 import ecom.user_service.dto.response.AuthResponse;
+import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.InvalidCredentialsException;
 import ecom.user_service.models.User;
@@ -36,9 +37,9 @@ public class AuthService {
         newUser.setPassword(passwordEncoder.encode(request.password()));
         newUser.setRole(request.role());
 
-        userRepository.save(newUser);
+        User savedUser = userRepository.save(newUser);
         String token = jwtService.generateToken(newUser);
-        return new AuthResponse(token, newUser.getEmail(), newUser.getRole());
+        return new AuthResponse(token, UserResponse.fromEntity(savedUser));
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -48,7 +49,7 @@ public class AuthService {
 
             User user = (User) authentication.getPrincipal();
             String token = jwtService.generateToken(user);
-            return new AuthResponse(token, user.getEmail(), user.getRole());
+            return new AuthResponse(token, UserResponse.fromEntity(user));
         } catch (AuthenticationException ex) {
             throw new InvalidCredentialsException("Invalid email or password");
         }
