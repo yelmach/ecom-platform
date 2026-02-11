@@ -13,6 +13,6 @@ export interface LoginRequest {
 }
 
 export interface AuthResponse {
-  jwt: string;
+  token: string;
   user: User;
 }
