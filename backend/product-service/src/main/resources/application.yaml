@@ -6,10 +6,9 @@ spring:
     import: optional:file:../.env[.properties]
   application:
     name: product-service
-  data:
-    mongodb:
-      uri: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}?authSource=admin
-      auto-index-creation: true
+  mongodb:
+    uri: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}?authSource=admin
+    auto-index-creation: true
 
 eureka:
   client:
