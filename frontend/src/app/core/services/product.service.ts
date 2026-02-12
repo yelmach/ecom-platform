@@ -1,6 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Product } from '../models/product';
+import { Page, Product, ProductFormData } from '../models/product';
 import { Observable } from 'rxjs';
 
 @Injectable({
@@ -9,11 +9,16 @@ import { Observable } from 'rxjs';
 export class ProductService {
   private http = inject(HttpClient);
 
-  getAllProduct(): Observable<Product[]> {
-    return this.http.get<Product[]>('/products');
+  getAllProduct(page = 0, size = 10): Observable<Page<Product>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<Page<Product>>('/products', { params });
   }
 
-  getSingleProduct(postId: String) : Observable<Product> {
-    return this.http.get<Product>(`/products/${postId}`)
+  getSingleProduct(productId: String): Observable<Product> {
+    return this.http.get<Product>(`/products/${productId}`);
+  }
+
+  createProduct(productData: ProductFormData): Observable<Product> {
+    return this.http.post<Product>('/products', productData);
   }
 }

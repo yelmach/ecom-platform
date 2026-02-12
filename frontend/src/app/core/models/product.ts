@@ -4,6 +4,7 @@ export interface Product {
     description: String;
     price: number;
     quantity: number;
+    mediaIds : String[];
     sellerId: String;
     createdAt: Date;
     updatedAt: Date;
@@ -12,6 +13,15 @@ export interface Product {
 export interface ProductFormData {
     name : String;
     description: String;
-    pirce: number;
+    price: number;
     quantity : number;
+    mediaIds : String[];
+}
+
+export interface Page<T> {
+    content: T[];
+    totalElements: number;
+    totalPages: number;
+    size: number;
+    number: number;
 }
