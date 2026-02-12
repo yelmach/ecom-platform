@@ -1,0 +1,22 @@
+{
+  "/auth": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/users": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/products": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/media": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": true
+  }
+}

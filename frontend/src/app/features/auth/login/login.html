@@ -1,0 +1,45 @@
+<div class="login-page">
+  <div class="form-panel">
+    <div class="form-card">
+      <h2>Welcome Back</h2>
+      <p class="subtitle">Enter your credentials to access your account.</p>
+
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <mat-form-field appearance="outline">
+          <mat-label>Email Address</mat-label>
+          <input matInput formControlName="email" type="email" />
+          <mat-icon matSuffix>email</mat-icon>
+          <mat-error>{{ getErrorMessage('email') }}</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            [type]="hidePassword() ? 'password' : 'text'"
+          />
+          <button mat-icon-button matSuffix type="button" (click)="togglePasswordVisibility()">
+            <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          <mat-error>{{ getErrorMessage('password') }}</mat-error>
+        </mat-form-field>
+
+        <button
+          matButton="filled"
+          type="submit"
+          class="submit-btn"
+          [disabled]="isSubmitting() || loginForm.invalid || loginForm.untouched"
+        >
+          {{ isSubmitting() ? 'Signing In...' : 'Sign In' }}
+        </button>
+
+        @if (submitError()) {
+          <p class="form-error">{{ submitError() }}</p>
+        }
+      </form>
+
+      <p class="register-link">Don't have an account? <a routerLink="/register">Sign up</a></p>
+    </div>
+  </div>
+</div>

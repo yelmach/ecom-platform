@@ -1,0 +1,79 @@
+<div class="register-page">
+  <div class="form-panel">
+    <div class="form-card">
+      <h2>Create Account</h2>
+      <p class="subtitle">join our marketplace today.</p>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+        <!-- Role selector -->
+        <div class="role-selector">
+          <button
+            type="button"
+            class="role-card"
+            [class.selected]="registerForm.controls.role.value === 'CLIENT'"
+            (click)="selectRole('CLIENT')"
+          >
+            <mat-icon>shopping_cart</mat-icon>
+            <span>Client</span>
+          </button>
+          <button
+            type="button"
+            class="role-card"
+            [class.selected]="registerForm.controls.role.value === 'SELLER'"
+            (click)="selectRole('SELLER')"
+          >
+            <mat-icon>storefront</mat-icon>
+            <span>Seller</span>
+          </button>
+        </div>
+
+        <!-- username -->
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput formControlName="username" />
+          <mat-icon matSuffix>person</mat-icon>
+          <mat-error>{{ getErrorMessage('username') }}</mat-error>
+        </mat-form-field>
+
+        <!-- email -->
+        <mat-form-field appearance="outline">
+          <mat-label>Email Address</mat-label>
+          <input matInput formControlName="email" type="email" />
+          <mat-icon matSuffix>email</mat-icon>
+          <mat-error>{{ getErrorMessage('email') }}</mat-error>
+        </mat-form-field>
+
+        <!-- password -->
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            [type]="hidePassword() ? 'password' : 'text'"
+          />
+          <button mat-icon-button matSuffix type="button" (click)="togglePasswordVisibility()">
+            <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          <mat-error>{{ getErrorMessage('password') }}</mat-error>
+        </mat-form-field>
+
+        <button
+          matButton="filled"
+          type="submit"
+          class="submit-btn"
+          [disabled]="
+            isSubmitting() || registerForm.invalid || registerForm.untouched ? true : false
+          "
+        >
+          {{ isSubmitting() ? 'Creating...' : 'Create Account' }}
+        </button>
+
+        @if (submitError()) {
+          <p class="form-error">{{ submitError() }}</p>
+        }
+      </form>
+
+      <p class="login-link">Already have an account? <a routerLink="/login">Log in</a></p>
+    </div>
+  </div>
+</div>
