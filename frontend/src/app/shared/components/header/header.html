@@ -1,1 +1,25 @@
-<p>header works!</p>
+<nav class="navbar">
+  <a routerLink="/shop" class="brand">01Market</a>
+
+  <div class="nav-actions">
+    @if (isAuthenticated()) {
+      @if (isSeller) {
+        <a matButton="filled" routerLink="/seller">Seller Dashboard</a>
+      }
+ 
+      <div class="avatar">
+        @if (currentUser()?.avatarUrl) {
+          <img [src]="currentUser()!.avatarUrl!" [alt]="currentUser()!.username" />
+        } @else {
+          <mat-icon>account_circle</mat-icon>
+        }
+      </div>
+      <button mat-icon-button (click)="logout()" aria-label="Logout">
+        <mat-icon>logout</mat-icon>
+      </button>
+    } @else {
+      <a mat-button routerLink="/login">Login</a>
+      <a mat-button routerLink="/register">Register</a>
+    }
+  </div>
+</nav>
