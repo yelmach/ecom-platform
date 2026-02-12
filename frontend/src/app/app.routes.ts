@@ -28,4 +28,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/seller/dashboard/dashboard').then((m) => m.Dashboard),
     canActivate: [sellerGuard],
   },
+  {
+    path: 'seller/create',
+    loadComponent: () =>
+      import('./features/seller/new-product/new-product').then((m) => m.NewProduct),
+    canActivate: [sellerGuard],
+  },
 ];
