@@ -28,7 +28,7 @@ export class ProductList {
   openProductDetails(product: Product): void {
     this.dialog.open(ProductDetails, {
       data: product,
-      width: '500px',
+      width: '550px',
     });
   }
 }
