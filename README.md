@@ -33,3 +33,26 @@
 - Profile dialog supports avatar upload and avatar removal (`avatarMediaId: null`).
 - Product create/edit uploads images through media-service and persists returned IDs.
 - Shop/seller/product details resolve image URLs via `GET /media/images/{productId}`.
+
+## Backend Docker Runbook
+
+### Prerequisites
+- Docker + Docker Compose
+- `backend/.env` present (you can copy from `backend/.env.example`)
+
+### Run backend stack
+1. `cd backend`
+2. `docker compose --env-file .env.docker up --build`
+
+### Stop backend stack
+1. `cd backend`
+2. `docker compose down`
+
+### Stop and remove data volumes
+1. `cd backend`
+2. `docker compose down -v`
+
+### Expected reachable URLs
+- Gateway: `http://localhost:8080`
+- MinIO API: `http://localhost:9000`
+- MinIO Console: `http://localhost:9001`
