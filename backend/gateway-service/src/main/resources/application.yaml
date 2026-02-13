@@ -22,3 +22,6 @@ eureka:
 
 jwt:
   public-key: ${JWT_PUBLIC_KEY_PATH}
+
+internal:
+  gateway-key: ${GATEWAY_INTERNAL_KEY}

@@ -16,3 +16,6 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: http://${EUREKA_HOST}:${EUREKA_PORT}/eureka/
+
+internal:
+  gateway-key: ${GATEWAY_INTERNAL_KEY}
