@@ -38,6 +38,14 @@ public class ProductController {
         return ResponseEntity.ok(productService.getProducts(page, size));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<Page<ProductResponse>> getMyProducts(
+            @RequestHeader("X-User-Id") String sellerId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
+        return ResponseEntity.ok(productService.getProductsBySeller(sellerId, page, size));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable String id) {
         return ResponseEntity.ok(productService.getProductById(id));
