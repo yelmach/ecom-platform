@@ -26,7 +26,8 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
     private static final List<String> PUBLIC_GET_PATHS = List.of(
             "/products",
-            "/media/images"
+            "/media/images",
+            "/media/profile"
     );
 
     private static final List<String> SELLER_PATHS = List.of(
