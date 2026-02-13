@@ -20,3 +20,6 @@ eureka:
 jwt:
   private-key: ${JWT_PRIVATE_KEY_PATH}
   expiration: ${JWT_EXPIRATION}
+
+internal:
+  gateway-key: ${GATEWAY_INTERNAL_KEY}

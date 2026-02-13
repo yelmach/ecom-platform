@@ -57,6 +57,18 @@
           </div>
         }
       </div>
+
+      <div
+        appInfiniteScroll
+        [enabled]="canLoadMore()"
+        (scrolled)="loadMore()"
+      ></div>
+
+      @if (loading()) {
+        <div class="loading-indicator">
+          <mat-spinner diameter="40" />
+        </div>
+      }
     }
   </div>
 

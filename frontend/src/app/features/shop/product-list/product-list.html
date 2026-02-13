@@ -1,5 +1,5 @@
 <div class="product-list-container">
-  
+
   <div class="product-grid">
     @for (product of products(); track product.id) {
       <div class="product-card">
@@ -19,4 +19,16 @@
       </div>
     }
   </div>
+
+  <div
+    appInfiniteScroll
+    [enabled]="canLoadMore()"
+    (scrolled)="loadProducts()"
+  ></div>
+
+  @if (loading()) {
+    <div class="loading-indicator">
+      <mat-spinner diameter="40" />
+    </div>
+  }
 </div>

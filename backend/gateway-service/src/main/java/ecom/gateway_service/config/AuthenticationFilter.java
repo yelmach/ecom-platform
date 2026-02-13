@@ -2,6 +2,7 @@ package ecom.gateway_service.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     private final JwtUtil jwtUtil;
+    private final String internalGatewayKey;
 
     private static final List<String> PUBLIC_PATHS = List.of(
             "/auth/login",
@@ -35,9 +37,10 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             "/media/images"
     );
 
-    public AuthenticationFilter(JwtUtil jwtUtil) {
+    public AuthenticationFilter(JwtUtil jwtUtil, @Value("${internal.gateway-key}") String internalGatewayKey) {
         super(Config.class);
         this.jwtUtil = jwtUtil;
+        this.internalGatewayKey = internalGatewayKey;
     }
 
     public static class Config {
@@ -51,20 +54,22 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             HttpMethod method = request.getMethod();
 
             // Strip spoofed headers from all requests
-            request = request.mutate().headers(headers -> {
+            ServerHttpRequest baseRequest = request.mutate().headers(headers -> {
                 headers.remove("X-User-Id");
                 headers.remove("X-User-Email");
                 headers.remove("X-User-Role");
+                headers.remove("X-Internal-Gateway-Key");
+                headers.set("X-Internal-Gateway-Key", internalGatewayKey);
             }).build();
 
             // Skip authentication for public endpoints
             if (isPublicPath(path)) {
-                return chain.filter(exchange.mutate().request(request).build());
+                return chain.filter(exchange.mutate().request(baseRequest).build());
             }
 
             // Allow unauthenticated GET on public read endpoints
             if (method == HttpMethod.GET && isPublicGetPath(path)) {
-                return chain.filter(exchange.mutate().request(request).build());
+                return chain.filter(exchange.mutate().request(baseRequest).build());
             }
 
             // All other requests require a valid token
@@ -88,7 +93,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             }
 
             // Forward user claims as headers to downstream services
-            ServerHttpRequest authenticatedRequest = request.mutate().headers(headers -> {
+            ServerHttpRequest authenticatedRequest = baseRequest.mutate().headers(headers -> {
                 headers.set("X-User-Id", claims.getSubject());
                 headers.set("X-User-Email", claims.get("email", String.class));
                 headers.set("X-User-Role", role);
