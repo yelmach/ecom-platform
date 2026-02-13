@@ -20,3 +20,7 @@ eureka:
 jwt:
   private-key: ${JWT_PRIVATE_KEY_PATH}
   expiration: ${JWT_EXPIRATION}
+
+media:
+  service:
+    base-url: ${MEDIA_SERVICE_BASE_URL}

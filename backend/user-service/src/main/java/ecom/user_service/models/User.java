@@ -47,7 +47,7 @@ public class User implements UserDetails {
 
     private Role role;
 
-    private String avatarUrl;
+    private String avatarMediaId;
 
     @CreatedDate
     private LocalDateTime createdAt;

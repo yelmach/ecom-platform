@@ -8,7 +8,7 @@ public record UserResponse(
         String email,
         String username,
         Role role,
-        String avatarUrl
+        String avatarMediaId
         ) {
 
     public static UserResponse fromEntity(User user) {
@@ -17,7 +17,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getUsername(),
                 user.getRole(),
-                user.getAvatarUrl()
+                user.getAvatarMediaId()
         );
     }
 
