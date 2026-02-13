@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { sellerGuard } from './core/guards/seller.guard';
+import { productOwnerGuard } from './core/guards/product-owner.guard';
 
 export const routes: Routes = [
   {
@@ -27,5 +28,17 @@ export const routes: Routes = [
     path: 'seller',
     loadComponent: () => import('./features/seller/dashboard/dashboard').then((m) => m.Dashboard),
     canActivate: [sellerGuard],
+  },
+  {
+    path: 'seller/create',
+    loadComponent: () =>
+      import('./features/seller/new-product/new-product').then((m) => m.NewProduct),
+    canActivate: [sellerGuard],
+  },
+  {
+    path: 'seller/edit/:id',
+    loadComponent: () =>
+      import('./features/seller/new-product/new-product').then((m) => m.NewProduct),
+    canActivate: [sellerGuard, productOwnerGuard],
   },
 ];

@@ -1,1 +1,63 @@
-<p>dashboard works!</p>
+<div class="dashboard-container">
+
+  <div class="stats-section">
+    <div class="stat-card">
+      <mat-icon class="stat-icon">local_mall</mat-icon>
+      <div class="stat-info">
+        <span class="stat-value">Currently You Have {{ totalProducts() }} Products</span>
+      </div>
+    </div>
+
+    <button mat-flat-button class="create" (click)="navigateToCreate()">
+      <mat-icon>add</mat-icon>
+        Create New Product
+    </button>
+  </div>
+
+  <div class="products-section">
+    <h2 class="section-title">My Products</h2>
+    <hr class="divider" />
+
+    @if (products().length === 0) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">storefront</mat-icon>
+        <p>You don't have any products yet.</p>
+      </div>
+    } @else {
+      <div class="product-grid">
+        @for (product of products(); track product.id) {
+          <div class="product-card">
+            <div class="product-image">
+              <img src="https://placehold.co/300x200/222/666?text={{ product.name }}" [alt]="product.name" />
+              <button mat-icon-button class="card-menu-btn" [matMenuTriggerFor]="productMenu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #productMenu="matMenu">
+                <button mat-menu-item (click)="editProduct(product)">
+                  <mat-icon>edit</mat-icon>
+                  <span>Update</span>
+                </button>
+                <button mat-menu-item class="delete-item" (click)="deleteProduct(product)">
+                  <mat-icon>delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </div>
+            <div class="product-info">
+              <h3 class="product-name">{{ product.name }}</h3>
+              <p class="product-quantity">{{ product.quantity }} in stock</p>
+              <div class="feet">
+                <p class="product-price">{{ product.price | currency }}</p>
+                <button matButton (click)="openProductDetails(product)">
+                  View detail
+                  <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+</div>

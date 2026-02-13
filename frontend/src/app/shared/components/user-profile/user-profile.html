@@ -1,0 +1,89 @@
+<div class="dialog-header">
+  <h2>Edit Profile</h2>
+  <button mat-icon-button mat-dialog-close aria-label="Close">
+    <mat-icon>close</mat-icon>
+  </button>
+</div>
+
+<div class="dialog-body">
+  <div class="avatar-section">
+    <div class="profile-avatar">
+      @if (avatarPreview()) {
+        <img [src]="avatarPreview()" [alt]="user.username" />
+      } @else {
+        <mat-icon>account_circle</mat-icon>
+      }
+    </div>
+    <div class="avatar-actions">
+      <button mat-button type="button" (click)="avatarInput.click()">
+        <mat-icon>photo_camera</mat-icon>
+        Change
+      </button>
+      @if (avatarPreview()) {
+        <button mat-button type="button" class="remove-avatar" (click)="removeAvatar()">
+          <mat-icon>delete</mat-icon>
+          Remove
+        </button>
+      }
+    </div>
+    <input
+      #avatarInput
+      type="file"
+      hidden
+      accept="image/png,image/jpeg,image/gif"
+      (change)="onAvatarSelected($event)"
+    />
+  </div>
+
+  <form [formGroup]="profileForm" (ngSubmit)="onSubmit()">
+    <mat-form-field appearance="outline">
+      <mat-label>Username</mat-label>
+      <input matInput formControlName="username" />
+      <mat-icon matPrefix>person</mat-icon>
+      <mat-error>{{ getErrorMessage('username') }}</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input matInput formControlName="email" type="email" />
+      <mat-icon matPrefix>email</mat-icon>
+      <mat-error>{{ getErrorMessage('email') }}</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>New Password</mat-label>
+      <input
+        matInput
+        formControlName="password"
+        [type]="hidePassword() ? 'password' : 'text'"
+        placeholder="Leave empty to keep current"
+      />
+      <mat-icon matPrefix>lock</mat-icon>
+      <button mat-icon-button matSuffix type="button" (click)="togglePasswordVisibility()">
+        <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+      </button>
+      <mat-error>{{ getErrorMessage('password') }}</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Role</mat-label>
+      <mat-select formControlName="role">
+        @for (role of roles; track role) {
+          <mat-option [value]="role">{{ role }}</mat-option>
+        }
+      </mat-select>
+      <mat-icon matPrefix>badge</mat-icon>
+    </mat-form-field>
+
+    @if (submitError()) {
+      <p class="form-error">{{ submitError() }}</p>
+    }
+
+    <div class="dialog-actions">
+      <button mat-button type="button" mat-dialog-close>Cancel</button>
+      <button mat-flat-button type="submit" [disabled]="isSubmitting() || profileForm.invalid">
+        {{ isSubmitting() ? 'Saving...' : 'Save Changes' }}
+      </button>
+    </div>
+  </form>
+</div>

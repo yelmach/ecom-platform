@@ -102,6 +102,9 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     }
 
     private boolean isPublicGetPath(String path) {
+        if (path.equals("/products/me")) {
+            return false;
+        }
         return PUBLIC_GET_PATHS.stream().anyMatch(path::startsWith);
     }
 

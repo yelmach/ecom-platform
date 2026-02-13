@@ -1,0 +1,140 @@
+<div class="new-product-page">
+  <div class="page-header">
+    <div>
+      <h1>{{ isEditMode() ? 'Edit Product' : 'Create New Product' }}</h1>
+      <p class="subtitle">{{ isEditMode() ? 'Update the details of your product.' : 'Fill in the details below to add a new item to your store.' }}</p>
+    </div>
+  </div>
+
+  <form [formGroup]="productForm" (ngSubmit)="onSubmit()">
+    <section class="form-section">
+      <div class="section-header">
+        <mat-icon>edit_note</mat-icon>
+        <h2>Basic Information</h2>
+      </div>
+
+      <div class="section-body">
+        <label class="field-label">Product Name</label>
+        <mat-form-field appearance="outline">
+          <input matInput formControlName="name" placeholder="e.g., Wireless Noise-Canceling Headphones" />
+          <mat-error>{{ getErrorMessage('name') }}</mat-error>
+        </mat-form-field>
+
+        <label class="field-label">Description</label>
+        <mat-form-field appearance="outline">
+          <input
+            matInput
+            formControlName="description"
+            max="10000"
+            placeholder="Detailed product description, features, and specifications..."
+          >
+          <mat-error>{{ getErrorMessage('description') }}</mat-error>
+        </mat-form-field>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="form-section">
+      <div class="section-header">
+        <mat-icon>sell</mat-icon>
+        <h2>Pricing</h2>
+      </div>
+
+      <div class="section-body">
+        <div class="row">
+          <div class="field">
+            <label class="field-label">Price</label>
+            <mat-form-field appearance="outline">
+              <span matTextPrefix>&nbsp;</span>
+              <input matInput formControlName="price" type="number" placeholder="0.00" />
+              <span matTextSuffix>USD</span>
+              <mat-error>{{ getErrorMessage('price') }}</mat-error>
+            </mat-form-field>
+          </div>
+
+          <div class="field">
+            <label class="field-label">{{ isEditMode() ? 'Stock' : 'Initial Stock' }}</label>
+            <mat-form-field appearance="outline">
+              <input matInput formControlName="quantity" type="number" placeholder="0" />
+              <mat-error>{{ getErrorMessage('quantity') }}</mat-error>
+            </mat-form-field>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Product Media -->
+    <section class="form-section">
+      <div class="section-header">
+        <mat-icon>image</mat-icon>
+        <h2>Product Media</h2>
+        <span class="hint">Max size 2MB</span>
+      </div>
+
+      <div class="section-body">
+        <div
+          class="dropzone"
+          [class.dragging]="isDragging()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+          (click)="fileInput.click()"
+        >
+          <input
+            #fileInput
+            type="file"
+            hidden
+            accept="image/png,image/jpeg,image/gif"
+            multiple
+            (change)="onFileSelected($event)"
+          />
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <p class="upload-text"><span class="upload-link">Upload a file</span></p>
+          <p class="upload-hint">or drag and drop</p>
+          <p class="upload-formats">PNG, JPG, GIF up to 2MB</p>
+        </div>
+
+        @if (images().length) {
+          <div class="image-previews">
+            @for (image of images(); track image.url; let i = $index) {
+              <div class="preview-item">
+                @if (i === 0) {
+                  <span class="primary-badge">PRIMARY</span>
+                }
+                <img [src]="image.url" [alt]="image.file.name" />
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="remove-btn"
+                  (click)="removeImage(i); $event.stopPropagation()"
+                >
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (submitError()) {
+      <p class="form-error">{{ submitError() }}</p>
+    }
+
+    <!-- Footer Actions -->
+    <div class="form-actions">
+      <button mat-button type="button" (click)="cancel()">Cancel</button>
+      <button
+        mat-flat-button
+        type="submit"
+        [disabled]="isSubmitting() || productForm.invalid || productForm.untouched"
+      >
+        @if (isSubmitting()) {
+          {{ isEditMode() ? 'Saving...' : 'Creating...' }}
+        } @else {
+          {{ isEditMode() ? 'Save Changes' : 'Create Product' }}
+        }
+      </button>
+    </div>
+  </form>
+</div>

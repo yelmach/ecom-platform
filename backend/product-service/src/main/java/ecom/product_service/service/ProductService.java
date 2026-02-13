@@ -27,6 +27,13 @@ public class ProductService {
         return products.map(ProductResponse::fromEntity);
     }
 
+    public Page<ProductResponse> getProductsBySeller(String sellerId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Product> products = productRepository.findBySellerId(sellerId, pageable);
+
+        return products.map(ProductResponse::fromEntity);
+    }
+
     public ProductResponse getProductById(String id) {
         return ProductResponse.fromEntity(findByIdOrThrow(id));
     }

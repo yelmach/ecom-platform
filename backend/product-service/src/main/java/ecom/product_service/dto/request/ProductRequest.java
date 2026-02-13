@@ -25,6 +25,6 @@ public class ProductRequest {
     @Min(value = 0, message = "Quantity cannot be negative")
     private Integer quantity;
 
-    @NotNull(message = "Media IDs cannot be null")
-    private List<@NotBlank(message = "Media ID cannot be blank") String> mediaIds;
+    
+    private List<String> mediaIds;
 }
