@@ -1,3 +1,4 @@
+
 .dialog-header {
   display: flex;
   align-items: center;
@@ -18,9 +19,17 @@
   align-items: center;
 }
 
+/* ===== Avatar ===== */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .profile-avatar {
-  width: 80px;
-  height: 80px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -28,7 +37,6 @@
   justify-content: center;
   background: var(--mat-sys-primary-container);
   color: var(--mat-sys-on-primary-container);
-  margin-bottom: 20px;
 
   img {
     width: 100%;
@@ -37,32 +45,54 @@
   }
 
   mat-icon {
-    font-size: 80px;
-    width: 80px;
-    height: 80px;
+    font-size: 88px;
+    width: 88px;
+    height: 88px;
   }
 }
 
-.detail-row {
+.avatar-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+
+  .remove-avatar {
+    color: var(--mat-sys-error);
+  }
+}
+
+/* ===== Role badge ===== */
+.role-badge {
+  font: var(--mat-sys-label-medium);
+  font-weight: var(--mat-sys-bold-font-weight);
+  color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  padding: 4px 12px;
+  border-radius: var(--mat-sys-corner-full);
+  margin-bottom: 24px;
+}
+
+/* ===== Form ===== */
+form {
   width: 100%;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  border-top: 1px solid var(--mat-sys-outline-variant);
+  flex-direction: column;
+  gap: 4px;
+}
 
-  .label {
-    font: var(--mat-sys-label-large);
-    color: var(--mat-sys-on-surface-variant);
-  }
+mat-form-field {
+  width: 100%;
+}
 
-  .value {
-    font: var(--mat-sys-body-large);
-    color: var(--mat-sys-on-surface);
-  }
+.form-error {
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+}
 
-  .role {
-    font-weight: var(--mat-sys-bold-font-weight);
-    color: var(--mat-sys-primary);
-  }
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }

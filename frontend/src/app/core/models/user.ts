@@ -6,3 +6,11 @@ export interface User {
   role: UserRole;
   avatarUrl: string | null;
 }
+
+export interface UpdateUserRequest {
+  username?: string;
+  email?: string;
+  password?: string;
+  role?: UserRole;
+  avatarUrl?: string;
+}

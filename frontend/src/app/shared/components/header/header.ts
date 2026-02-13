@@ -26,7 +26,7 @@ export class Header {
   openProfile(): void {
     this.dialog.open(ProfileDialog, {
       data: this.currentUser(),
-      width: '360px',
+      width: '550px',
     });
   }
 
