@@ -24,3 +24,5 @@ jwt:
 media:
   service:
     base-url: ${MEDIA_SERVICE_BASE_URL}
+internal:
+  gateway-key: ${GATEWAY_INTERNAL_KEY}

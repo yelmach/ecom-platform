@@ -1,5 +1,4 @@
 <div class="dashboard-container">
-
   <div class="stats-section">
     <div class="stat-card">
       <mat-icon class="stat-icon">local_mall</mat-icon>
@@ -10,7 +9,7 @@
 
     <button mat-flat-button class="create" (click)="navigateToCreate()">
       <mat-icon>add</mat-icon>
-        Create New Product
+      Create New Product
     </button>
   </div>
 
@@ -57,7 +56,14 @@
           </div>
         }
       </div>
+
+      <div appInfiniteScroll [enabled]="canLoadMore()" (scrolled)="loadMore()"></div>
+
+      @if (loading()) {
+        <div class="loading-indicator">
+          <mat-spinner diameter="40" />
+        </div>
+      }
     }
   </div>
-
 </div>
