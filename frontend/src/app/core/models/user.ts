@@ -1,6 +1,7 @@
 export type UserRole = 'CLIENT' | 'SELLER';
 
 export interface User {
+  userId: string;
   username: string;
   email: string;
   role: UserRole;

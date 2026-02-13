@@ -4,7 +4,7 @@ import ecom.user_service.models.Role;
 import ecom.user_service.models.User;
 
 public record UserResponse(
-        String id,
+        String userId,
         String email,
         String username,
         Role role,
