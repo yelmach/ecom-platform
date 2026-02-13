@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Page, Product, ProductFormData } from '../models/product';
+import { Page, Product, ProductFormData, ProductUpdateData } from '../models/product';
 import { Observable } from 'rxjs';
 
 @Injectable({
@@ -14,11 +14,24 @@ export class ProductService {
     return this.http.get<Page<Product>>('/products', { params });
   }
 
+  getMyProducts(page = 0, size = 10): Observable<Page<Product>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<Page<Product>>('/products/me', { params });
+  }
+
   getSingleProduct(productId: String): Observable<Product> {
     return this.http.get<Product>(`/products/${productId}`);
   }
 
   createProduct(productData: ProductFormData): Observable<Product> {
     return this.http.post<Product>('/products', productData);
+  }
+
+  updateProduct(productId: String, productData: ProductUpdateData): Observable<Product> {
+    return this.http.put<Product>(`/products/${productId}`, productData);
+  }
+
+  deleteProduct(productId: String): Observable<void> {
+    return this.http.delete<void>(`/products/${productId}`);
   }
 }

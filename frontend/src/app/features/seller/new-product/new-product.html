@@ -1,8 +1,8 @@
 <div class="new-product-page">
   <div class="page-header">
     <div>
-      <h1>Create New Product</h1>
-      <p class="subtitle">Fill in the details below to add a new item to your store.</p>
+      <h1>{{ isEditMode() ? 'Edit Product' : 'Create New Product' }}</h1>
+      <p class="subtitle">{{ isEditMode() ? 'Update the details of your product.' : 'Fill in the details below to add a new item to your store.' }}</p>
     </div>
   </div>
 
@@ -47,13 +47,13 @@
             <mat-form-field appearance="outline">
               <span matTextPrefix>&nbsp;</span>
               <input matInput formControlName="price" type="number" placeholder="0.00" />
-              <span matTextSuffix>MAD</span>
+              <span matTextSuffix>USD</span>
               <mat-error>{{ getErrorMessage('price') }}</mat-error>
             </mat-form-field>
           </div>
 
           <div class="field">
-            <label class="field-label">Initial Stock</label>
+            <label class="field-label">{{ isEditMode() ? 'Stock' : 'Initial Stock' }}</label>
             <mat-form-field appearance="outline">
               <input matInput formControlName="quantity" type="number" placeholder="0" />
               <mat-error>{{ getErrorMessage('quantity') }}</mat-error>
@@ -91,7 +91,7 @@
           <mat-icon class="upload-icon">cloud_upload</mat-icon>
           <p class="upload-text"><span class="upload-link">Upload a file</span></p>
           <p class="upload-hint">or drag and drop</p>
-          <p class="upload-formats">PNG, JPG, GIF up to 5MB</p>
+          <p class="upload-formats">PNG, JPG, GIF up to 2MB</p>
         </div>
 
         @if (images().length) {
@@ -130,12 +130,9 @@
         [disabled]="isSubmitting() || productForm.invalid || productForm.untouched"
       >
         @if (isSubmitting()) {
-          Creating...
+          {{ isEditMode() ? 'Saving...' : 'Creating...' }}
         } @else {
-          <ng-container>
-            <mat-icon>check</mat-icon>
-            Create Product
-          </ng-container>
+          {{ isEditMode() ? 'Save Changes' : 'Create Product' }}
         }
       </button>
     </div>

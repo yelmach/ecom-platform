@@ -18,6 +18,14 @@ export interface ProductFormData {
     mediaIds : String[];
 }
 
+export interface ProductUpdateData {
+    name?: String;
+    description?: String;
+    price?: number;
+    quantity?: number;
+    mediaIds?: String[];
+}
+
 export interface Page<T> {
     content: T[];
     totalElements: number;

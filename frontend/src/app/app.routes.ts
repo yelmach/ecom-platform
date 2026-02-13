@@ -34,4 +34,10 @@ export const routes: Routes = [
       import('./features/seller/new-product/new-product').then((m) => m.NewProduct),
     canActivate: [sellerGuard],
   },
+  {
+    path: 'seller/edit/:id',
+    loadComponent: () =>
+      import('./features/seller/new-product/new-product').then((m) => m.NewProduct),
+    canActivate: [sellerGuard],
+  },
 ];

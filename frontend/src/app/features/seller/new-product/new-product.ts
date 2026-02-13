@@ -1,13 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { ReactiveFormsModule, FormGroup, FormControl, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIcon, MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { finalize } from 'rxjs';
 import { ProductService } from '../../../core/services/product.service';
+import { Product } from '../../../core/models/product';
 
 interface ImagePreview {
   file: File;
@@ -20,9 +21,13 @@ interface ImagePreview {
   templateUrl: './new-product.html',
   styleUrl: './new-product.scss',
 })
-export class NewProduct {
+export class NewProduct implements OnInit {
   private productService = inject(ProductService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
+
+  readonly isEditMode = signal(false);
+  private editProductId: String = '';
 
   readonly isSubmitting = signal(false);
   readonly submitError = signal('');
@@ -46,6 +51,22 @@ export class NewProduct {
       validators: [Validators.required, Validators.min(1)],
     }),
   });
+
+  ngOnInit() {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) {
+      this.isEditMode.set(true);
+      this.editProductId = id;
+      this.productService.getSingleProduct(id).subscribe((product: Product) => {
+        this.productForm.patchValue({
+          name: product.name as string,
+          description: product.description as string,
+          price: product.price,
+          quantity: product.quantity,
+        });
+      });
+    }
+  }
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -88,25 +109,45 @@ export class NewProduct {
     }
 
     const formValue = this.productForm.getRawValue();
-    const payload = {
-      name: formValue.name,
-      description: formValue.description,
-      price: formValue.price!,
-      quantity: formValue.quantity!,
-      mediaIds: [] as String[],
-    };
 
     this.isSubmitting.set(true);
 
-    this.productService
-      .createProduct(payload)
-      .pipe(finalize(() => this.isSubmitting.set(false)))
-      .subscribe({
-        next: () => {
-          void this.router.navigateByUrl('/seller');
-        },
-        error: (error: HttpErrorResponse) => this.handleSubmitError(error),
-      });
+    if (this.isEditMode()) {
+      const payload = {
+        name: formValue.name,
+        description: formValue.description,
+        price: formValue.price!,
+        quantity: formValue.quantity!,
+      };
+
+      this.productService
+        .updateProduct(this.editProductId, payload)
+        .pipe(finalize(() => this.isSubmitting.set(false)))
+        .subscribe({
+          next: () => {
+            void this.router.navigateByUrl('/seller');
+          },
+          error: (error: HttpErrorResponse) => this.handleSubmitError(error),
+        });
+    } else {
+      const payload = {
+        name: formValue.name,
+        description: formValue.description,
+        price: formValue.price!,
+        quantity: formValue.quantity!,
+        mediaIds: [] as String[],
+      };
+
+      this.productService
+        .createProduct(payload)
+        .pipe(finalize(() => this.isSubmitting.set(false)))
+        .subscribe({
+          next: () => {
+            void this.router.navigateByUrl('/seller');
+          },
+          error: (error: HttpErrorResponse) => this.handleSubmitError(error),
+        });
+    }
   }
 
   cancel(): void {
@@ -167,6 +208,6 @@ export class NewProduct {
       return;
     }
 
-    this.submitError.set('Failed to create product');
+    this.submitError.set(this.isEditMode() ? 'Failed to update product' : 'Failed to create product');
   }
 }
