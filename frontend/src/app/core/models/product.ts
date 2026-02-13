@@ -1,29 +1,29 @@
 export interface Product {
-    id: String;
-    name: String;
-    description: String;
+    id: string;
+    name: string;
+    description: string;
     price: number;
     quantity: number;
-    mediaIds : String[];
-    sellerId: String;
+    mediaIds : string[];
+    sellerId: string;
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface ProductFormData {
-    name : String;
-    description: String;
+    name : string;
+    description: string;
     price: number;
     quantity : number;
-    mediaIds : String[];
+    mediaIds : string[];
 }
 
 export interface ProductUpdateData {
-    name?: String;
-    description?: String;
+    name?: string;
+    description?: string;
     price?: number;
     quantity?: number;
-    mediaIds?: String[];
+    mediaIds?: string[];
 }
 
 export interface Page<T> {

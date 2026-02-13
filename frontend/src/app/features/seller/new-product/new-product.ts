@@ -6,13 +6,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIcon, MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { finalize } from 'rxjs';
+import { finalize, map, Observable, of, switchMap } from 'rxjs';
 import { ProductService } from '../../../core/services/product.service';
 import { Product } from '../../../core/models/product';
+import { MediaService } from '../../../core/services/media.service';
 
 interface ImagePreview {
-  file: File;
+  file: File | null;
   url: string;
+  mediaId?: string;
 }
 
 @Component({
@@ -23,17 +25,20 @@ interface ImagePreview {
 })
 export class NewProduct implements OnInit {
   private productService = inject(ProductService);
+  private mediaService = inject(MediaService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
   readonly isEditMode = signal(false);
-  private editProductId: String = '';
+  private editProductId = '';
 
   readonly isSubmitting = signal(false);
   readonly submitError = signal('');
   readonly fieldErrors = signal<{ [key: string]: string }>({});
   readonly images = signal<ImagePreview[]>([]);
+  readonly imageError = signal('');
   readonly isDragging = signal(false);
+  private readonly initialEditSignature = signal<string | null>(null);
 
   readonly productForm = new FormGroup({
     name: new FormControl('', {
@@ -59,11 +64,12 @@ export class NewProduct implements OnInit {
       this.editProductId = id;
       this.productService.getSingleProduct(id).subscribe((product: Product) => {
         this.productForm.patchValue({
-          name: product.name as string,
-          description: product.description as string,
+          name: product.name,
+          description: product.description,
           price: product.price,
           quantity: product.quantity,
         });
+        this.loadExistingImages(product);
       });
     }
   }
@@ -90,8 +96,7 @@ export class NewProduct implements OnInit {
     event.preventDefault();
     this.isDragging.set(false);
     if (event.dataTransfer?.files) {
-      const files = Array.from(event.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
-      this.addFiles(files);
+      this.addFiles(Array.from(event.dataTransfer.files));
     }
   }
 
@@ -107,22 +112,28 @@ export class NewProduct implements OnInit {
     if (this.productForm.invalid) {
       return;
     }
+    if (this.isEditMode() && !this.hasUnsavedChanges()) {
+      return;
+    }
 
     const formValue = this.productForm.getRawValue();
 
     this.isSubmitting.set(true);
 
     if (this.isEditMode()) {
-      const payload = {
+      const basePayload = {
         name: formValue.name,
         description: formValue.description,
         price: formValue.price!,
         quantity: formValue.quantity!,
       };
 
-      this.productService
-        .updateProduct(this.editProductId, payload)
-        .pipe(finalize(() => this.isSubmitting.set(false)))
+      this.resolveEditMediaIds()
+        .pipe(
+          switchMap((mediaIds) =>
+            this.productService.updateProduct(this.editProductId, { ...basePayload, mediaIds })),
+          finalize(() => this.isSubmitting.set(false)),
+        )
         .subscribe({
           next: () => {
             void this.router.navigateByUrl('/seller');
@@ -135,12 +146,27 @@ export class NewProduct implements OnInit {
         description: formValue.description,
         price: formValue.price!,
         quantity: formValue.quantity!,
-        mediaIds: [] as String[],
+        mediaIds: [] as string[],
       };
 
-      this.productService
-        .createProduct(payload)
-        .pipe(finalize(() => this.isSubmitting.set(false)))
+      this.productService.createProduct(payload)
+        .pipe(
+          switchMap((createdProduct) => {
+            const files = this.images().filter((image) => image.file).map((image) => image.file!);
+            if (!files.length) {
+              return of(createdProduct);
+            }
+
+            return this.mediaService.uploadProductImages(createdProduct.id, files).pipe(
+              switchMap((uploadResponse) =>
+                this.productService.updateProduct(createdProduct.id, {
+                  mediaIds: uploadResponse.images.map((image) => image.id),
+                }),
+              ),
+            );
+          }),
+          finalize(() => this.isSubmitting.set(false)),
+        )
         .subscribe({
           next: () => {
             void this.router.navigateByUrl('/seller');
@@ -180,12 +206,85 @@ export class NewProduct implements OnInit {
     return '';
   }
 
+  isSubmitDisabled(): boolean {
+    if (this.isSubmitting() || this.productForm.invalid) {
+      return true;
+    }
+
+    if (!this.isEditMode()) {
+      return false;
+    }
+
+    return !this.hasUnsavedChanges();
+  }
+
   private addFiles(files: File[]): void {
-    const newPreviews = files.map((file) => ({
+    this.imageError.set('');
+
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+    const currentImages = this.images();
+    const slotsLeft = 5 - currentImages.length;
+
+    if (slotsLeft <= 0) {
+      this.imageError.set('Maximum 5 images are allowed.');
+      return;
+    }
+
+    const validFiles = files
+      .filter((file) => allowedTypes.has(file.type))
+      .filter((file) => file.size <= 2 * 1024 * 1024)
+      .slice(0, slotsLeft);
+
+    if (validFiles.length < files.length) {
+      this.imageError.set('Only PNG/JPG/GIF/WEBP images up to 2MB are accepted. Max 5 images.');
+    }
+
+    const newPreviews = validFiles.map((file) => ({
       file,
       url: URL.createObjectURL(file),
     }));
-    this.images.update((current) => [...current, ...newPreviews]);
+
+    this.images.set([...currentImages, ...newPreviews]);
+  }
+
+  private loadExistingImages(product: Product): void {
+    this.mediaService.getProductImages(product.id).subscribe({
+      next: (response) => {
+        const existingImages: ImagePreview[] = this.mediaService
+          .getOrderedProductImages(response, product.mediaIds)
+          .map((image) => ({
+            file: null,
+            url: image.url,
+            mediaId: image.id,
+          }));
+
+        this.images.set(existingImages);
+        this.captureInitialEditState(product, existingImages);
+      },
+      error: () => {
+        this.images.set([]);
+        this.captureInitialEditState(product, []);
+      },
+    });
+  }
+
+  private resolveEditMediaIds(): Observable<string[]> {
+    const existingMediaIds = this.getCurrentReferencedMediaIds();
+
+    const newFiles = this.images()
+      .filter((image) => image.file)
+      .map((image) => image.file!) as File[];
+
+    if (!newFiles.length) {
+      return of(existingMediaIds);
+    }
+
+    return this.mediaService.uploadProductImages(this.editProductId, newFiles).pipe(
+      map((uploadResponse) => [
+        ...existingMediaIds,
+        ...uploadResponse.images.map((image) => image.id),
+      ]),
+    );
   }
 
   private handleSubmitError(error: HttpErrorResponse): void {
@@ -208,6 +307,71 @@ export class NewProduct implements OnInit {
       return;
     }
 
+    if (error.status === 403) {
+      this.submitError.set('Seller permission is required. Please sign in again with a seller account.');
+      return;
+    }
+
     this.submitError.set(this.isEditMode() ? 'Failed to update product' : 'Failed to create product');
+  }
+
+  private hasUnsavedChanges(): boolean {
+    const initialSignature = this.initialEditSignature();
+    if (!initialSignature) {
+      return false;
+    }
+
+    if (this.images().some((image) => !!image.file)) {
+      return true;
+    }
+
+    const formValue = this.productForm.getRawValue();
+    const currentSignature = this.toStateSignature(
+      formValue.name,
+      formValue.description,
+      formValue.price,
+      formValue.quantity,
+      this.getCurrentReferencedMediaIds(),
+    );
+
+    return currentSignature !== initialSignature;
+  }
+
+  private captureInitialEditState(product: Product, existingImages: ImagePreview[]): void {
+    const initialMediaIds = existingImages
+      .filter((image) => image.mediaId)
+      .map((image) => image.mediaId as string);
+
+    this.initialEditSignature.set(
+      this.toStateSignature(
+        product.name,
+        product.description,
+        product.price,
+        product.quantity,
+        initialMediaIds,
+      ),
+    );
+  }
+
+  private getCurrentReferencedMediaIds(): string[] {
+    return this.images()
+      .filter((image) => image.mediaId)
+      .map((image) => image.mediaId as string);
+  }
+
+  private toStateSignature(
+    name: string,
+    description: string,
+    price: number | null,
+    quantity: number | null,
+    mediaIds: string[],
+  ): string {
+    return JSON.stringify({
+      name,
+      description,
+      price,
+      quantity,
+      mediaIds,
+    });
   }
 }

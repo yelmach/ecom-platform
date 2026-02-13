@@ -4,7 +4,7 @@
     @for (product of products(); track product.id) {
       <div class="product-card">
         <div class="product-image">
-          <img src="https://placehold.co/300x200/222/666?text={{ product.name }}" [alt]="product.name" />
+          <img [src]="getProductImageUrl(product)" [alt]="product.name" />
         </div>
         <div class="product-info">
           <h3 class="product-name">{{ product.name }}</h3>

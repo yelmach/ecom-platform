@@ -19,7 +19,7 @@ export class ProductService {
     return this.http.get<Page<Product>>('/products/me', { params });
   }
 
-  getSingleProduct(productId: String): Observable<Product> {
+  getSingleProduct(productId: string): Observable<Product> {
     return this.http.get<Product>(`/products/${productId}`);
   }
 
@@ -27,11 +27,11 @@ export class ProductService {
     return this.http.post<Product>('/products', productData);
   }
 
-  updateProduct(productId: String, productData: ProductUpdateData): Observable<Product> {
+  updateProduct(productId: string, productData: ProductUpdateData): Observable<Product> {
     return this.http.put<Product>(`/products/${productId}`, productData);
   }
 
-  deleteProduct(productId: String): Observable<void> {
+  deleteProduct(productId: string): Observable<void> {
     return this.http.delete<void>(`/products/${productId}`);
   }
 }

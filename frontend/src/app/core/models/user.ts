@@ -5,7 +5,7 @@ export interface User {
   username: string;
   email: string;
   role: UserRole;
-  avatarUrl: string | null;
+  avatarMediaId: string | null;
 }
 
 export interface UpdateUserRequest {
@@ -13,5 +13,5 @@ export interface UpdateUserRequest {
   email?: string;
   password?: string;
   role?: UserRole;
-  avatarUrl?: string;
+  avatarMediaId?: string | null;
 }

@@ -27,6 +27,35 @@
           </button>
         </div>
 
+        <div class="profile-upload">
+          <label class="upload-label">Profile Avatar (Optional)</label>
+          <div class="upload-row">
+            <div class="avatar-preview" (click)="avatarInput.click()">
+              @if (avatarPreview()) {
+                <img [src]="avatarPreview()!" alt="Avatar preview" />
+              } @else {
+                <mat-icon>account_circle</mat-icon>
+              }
+            </div>
+            <div class="upload-info">
+              <button type="button" class="upload-link" (click)="avatarInput.click()">
+                Upload image
+              </button>
+              <span class="upload-hint">PNG/JPG/GIF/WEBP up to 2MB</span>
+              @if (avatarPreview()) {
+                <button type="button" class="upload-link" (click)="clearAvatar()">Remove</button>
+              }
+            </div>
+            <input
+              #avatarInput
+              type="file"
+              hidden
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              (change)="onAvatarSelected($event)"
+            />
+          </div>
+        </div>
+
         <!-- username -->
         <mat-form-field appearance="outline">
           <mat-label>Username</mat-label>
@@ -70,6 +99,9 @@
 
         @if (submitError()) {
           <p class="form-error">{{ submitError() }}</p>
+        }
+        @if (avatarUploadWarning()) {
+          <p class="form-error">{{ avatarUploadWarning() }}</p>
         }
       </form>
 

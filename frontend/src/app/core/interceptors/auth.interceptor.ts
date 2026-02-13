@@ -14,10 +14,6 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     });
   }
 
-  if (!token || req.headers.has('Authorization')) {
-    return next(req);
-  }
-
   return next(req).pipe(
     catchError((error) => {
       if (error.status === 401) {
