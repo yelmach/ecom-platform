@@ -6,13 +6,19 @@ services:
     image: mongo:latest
     container_name: ecom-mongo
     ports:
-      - "${MONGO_PORT}:27017" # Maps localhost:27017 -> Container:27017
+      - "${MONGO_PORT}:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     networks:
       - ecom-network
 
@@ -31,6 +37,175 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # SERVICE DISCOVERY (Eureka)
+  # ----------------------------
+  discovery-service:
+    build:
+      context: ./discovery-service
+    container_name: ecom-discovery-service
+    env_file:
+      - .env.docker
+    environment:
+      EUREKA_HOST: discovery-service
+      EUREKA_PORT: 8761
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # MEDIA SERVICE
+  # ----------------------------
+  media-service:
+    build:
+      context: ./media-service
+    container_name: ecom-media-service
+    env_file:
+      - .env.docker
+    environment:
+      MEDIA_SERVICE_PORT: 8083
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      EUREKA_HOST: discovery-service
+      EUREKA_PORT: 8761
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # USER SERVICE
+  # ----------------------------
+  user-service:
+    build:
+      context: ./user-service
+    container_name: ecom-user-service
+    env_file:
+      - .env.docker
+    environment:
+      USER_SERVICE_PORT: 8081
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      EUREKA_HOST: discovery-service
+      EUREKA_PORT: 8761
+      MEDIA_SERVICE_BASE_URL: http://media-service:8083
+      JWT_PRIVATE_KEY_PATH: /opt/keys/private.pem
+    volumes:
+      - ./keys:/opt/keys:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # PRODUCT SERVICE
+  # ----------------------------
+  product-service:
+    build:
+      context: ./product-service
+    container_name: ecom-product-service
+    env_file:
+      - .env.docker
+    environment:
+      PRODUCT_SERVICE_PORT: 8082
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      EUREKA_HOST: discovery-service
+      EUREKA_PORT: 8761
+      MEDIA_SERVICE_BASE_URL: http://media-service:8083
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # API GATEWAY
+  # ----------------------------
+  gateway-service:
+    build:
+      context: ./gateway-service
+    container_name: ecom-gateway-service
+    env_file:
+      - .env.docker
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT}
+      EUREKA_HOST: discovery-service
+      EUREKA_PORT: 8761
+      JWT_PUBLIC_KEY_PATH: /opt/keys/public.pem
+      GATEWAY_SSL_ENABLED: ${GATEWAY_SSL_ENABLED}
+      GATEWAY_SSL_KEY_STORE: ${GATEWAY_SSL_KEY_STORE}
+      GATEWAY_SSL_KEY_STORE_PASSWORD: ${GATEWAY_SSL_KEY_STORE_PASSWORD}
+      GATEWAY_SSL_KEY_STORE_TYPE: ${GATEWAY_SSL_KEY_STORE_TYPE}
+    volumes:
+      - ./keys:/opt/keys:ro
+      - ./certs:/opt/certs:ro
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_PORT}:8443"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:8443/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     networks:
       - ecom-network
 

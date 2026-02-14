@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { ReactiveFormsModule, FormGroup, FormControl, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogClose, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -7,10 +7,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { finalize } from 'rxjs';
+import { finalize, switchMap } from 'rxjs';
 import { User, UserRole, UpdateUserRequest } from '../../../core/models/user';
 import { UserService } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { MediaService } from '../../../core/services/media.service';
 
 @Component({
   selector: 'app-profile-dialog',
@@ -29,6 +30,7 @@ import { AuthService } from '../../../core/services/auth.service';
 export class ProfileDialog {
   private userService = inject(UserService);
   private authService = inject(AuthService);
+  private mediaService = inject(MediaService);
   private dialogRef = inject(MatDialogRef<ProfileDialog>);
 
   user: User = inject(MAT_DIALOG_DATA);
@@ -36,8 +38,8 @@ export class ProfileDialog {
   readonly isSubmitting = signal(false);
   readonly submitError = signal('');
   readonly fieldErrors = signal<{ [key: string]: string }>({});
-  readonly hidePassword = signal(true);
-  readonly avatarPreview = signal<string | null>(this.user.avatarUrl);
+  readonly hidePassword = signal(true); 
+  readonly avatarPreview = signal<string | null>(null);
   readonly avatarRemoved = signal(false);
   private avatarFile: File | null = null;
 
@@ -61,18 +63,44 @@ export class ProfileDialog {
     }),
   });
 
+  ngOnInit(): void {
+    if (!this.user.avatarMediaId) {
+      return;
+    }
+
+    this.mediaService.getProfile(this.user.userId).subscribe({
+      next: (profile) => this.avatarPreview.set(profile.avatar.url),
+      error: () => this.avatarPreview.set(null),
+    });
+  }
+
   togglePasswordVisibility(): void {
     this.hidePassword.update((v) => !v);
   }
 
   onAvatarSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    if (input.files?.[0]) {
-      this.avatarFile = input.files[0];
-      this.avatarPreview.set(URL.createObjectURL(this.avatarFile));
-      this.avatarRemoved.set(false);
-      input.value = '';
+    const file = input.files?.[0];
+    if (!file) {
+      return;
     }
+
+    if (!file.type.startsWith('image/')) {
+      this.submitError.set('Avatar must be an image file.');
+      input.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      this.submitError.set('Avatar must be 2 MB or less.');
+      input.value = '';
+      return;
+    }
+
+    this.avatarFile = file;
+    this.avatarPreview.set(URL.createObjectURL(file));
+    this.avatarRemoved.set(false);
+    input.value = '';
   }
 
   removeAvatar(): void {
@@ -91,6 +119,7 @@ export class ProfileDialog {
 
     const formValue = this.profileForm.getRawValue();
     const payload: UpdateUserRequest = {};
+    const roleChanged = formValue.role !== this.user.role;
 
     if (formValue.username !== this.user.username) {
       payload.username = formValue.username;
@@ -105,22 +134,34 @@ export class ProfileDialog {
       payload.role = formValue.role;
     }
     if (this.avatarRemoved()) {
-      payload.avatarUrl = '';
-    } else if (this.avatarFile) {
-      // TODO: upload file to media service first, then set the returned URL
-      payload.avatarUrl = this.avatarPreview() ?? '';
+      payload.avatarMediaId = null;
     }
 
-    if (Object.keys(payload).length === 0) {
+    const hasAvatarUpload = !!this.avatarFile;
+    if (!hasAvatarUpload && Object.keys(payload).length === 0) {
       this.dialogRef.close();
       return;
     }
 
     this.isSubmitting.set(true);
 
-    this.userService.updateProfile(payload).pipe(finalize(() => this.isSubmitting.set(false)))
+    const request$ = hasAvatarUpload
+      ? this.mediaService.uploadProfile(this.avatarFile!).pipe(
+        switchMap((profile) => {
+          payload.avatarMediaId = profile.avatar.id;
+          return this.userService.updateProfile(payload);
+        }))
+      : this.userService.updateProfile(payload);
+
+    request$
+      .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
         next: (updatedUser) => {
+          if (roleChanged) {
+            this.dialogRef.close();
+            this.authService.logout('/login');
+            return;
+          }
           this.authService.currentUser.set(updatedUser);
           this.dialogRef.close(updatedUser);
         },

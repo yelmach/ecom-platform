@@ -1,20 +1,24 @@
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 24px;
+  padding: clamp(12px, 2vw, 24px);
 }
 
 // Stats section
 .stats-section {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 25px;
 }
 
-.create{
-    height: 45px;
-    width: 195px;
+.create {
+  height: 45px;
+  width: auto;
+  min-width: 195px;
+  white-space: nowrap;
 }
 
 .stat-card {
@@ -22,7 +26,8 @@
   align-items: center;
   gap: 16px;
   padding: 20px 28px;
-  width: 600px;
+  width: min(100%, 600px);
+  flex: 1 1 420px;
 }
 
 .stat-icon {
@@ -36,12 +41,11 @@
   display: flex;
   align-items: center;
   gap: 16px;
-
 }
 
 .stat-value {
-  font: var(--mat-sys-headline-medium);
-  font-size: 30px;
+  font-size: clamp(1.25rem, 3.2vw, 1.875rem);
+  line-height: 1.2;
   color: var(--mat-sys-on-surface);
 }
 
@@ -151,6 +155,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 
   .product-price {
     font: var(--mat-sys-title-medium);
@@ -164,4 +170,73 @@
   display: flex;
   justify-content: center;
   padding: 32px 0;
+}
+
+@media (max-width: 1279px) {
+  .product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 959px) {
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .stat-card {
+    padding: 16px 20px;
+  }
+
+  .create {
+    min-width: 170px;
+  }
+}
+
+@media (max-width: 639px) {
+  .stats-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stat-card {
+    width: 100%;
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .stat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .create {
+    width: 100%;
+  }
+
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-info {
+    padding: 12px;
+  }
+
+  .feet {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .feet button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (hover: none) {
+  .card-menu-btn {
+    opacity: 1;
+  }
 }

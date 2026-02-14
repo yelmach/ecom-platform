@@ -17,5 +17,6 @@ eureka:
     service-url:
       defaultZone: http://${EUREKA_HOST}:${EUREKA_PORT}/eureka/
 
-internal:
-  gateway-key: ${GATEWAY_INTERNAL_KEY}
+media:
+  service:
+    base-url: ${MEDIA_SERVICE_BASE_URL}

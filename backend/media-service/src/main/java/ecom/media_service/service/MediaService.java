@@ -81,6 +81,9 @@ public class MediaService {
         for (Media avatar : existingAvatars) {
             objectStorageService.delete(avatar.getObjectKey());
         }
+        if (!existingAvatars.isEmpty()) {
+            mediaRepository.deleteAll(existingAvatars);
+        }
 
         String objectKey = "avatars/" + userId + "/" + UUID.randomUUID() + validatedFile.extension();
 

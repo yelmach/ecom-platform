@@ -1,10 +1,14 @@
 package ecom.product_service.service;
 
+import java.util.ArrayList;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import ecom.product_service.dto.request.ProductRequest;
 import ecom.product_service.dto.request.ProductUpdateRequest;
@@ -19,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProductService {
     private final ProductRepository productRepository;
+    private final MediaValidationService mediaValidationService;
 
     public Page<ProductResponse> getProducts(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -39,12 +44,18 @@ public class ProductService {
     }
 
     public ProductResponse createProduct(ProductRequest request, String sellerId) {
+        if (request.getMediaIds() != null && !request.getMediaIds().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "mediaIds must be empty when creating a product");
+        }
+
         Product product = Product.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .quantity(request.getQuantity())
-                .mediaIds(request.getMediaIds())
+                .mediaIds(new ArrayList<>())
                 .sellerId(sellerId)
                 .build();
 
@@ -68,6 +79,7 @@ public class ProductService {
             existingProduct.setQuantity(request.getQuantity());
         }
         if (request.getMediaIds() != null) {
+            mediaValidationService.validateProductMediaReferences(id, request.getMediaIds());
             existingProduct.setMediaIds(request.getMediaIds());
         }
 

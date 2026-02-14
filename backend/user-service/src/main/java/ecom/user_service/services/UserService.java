@@ -17,6 +17,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MediaValidationService mediaValidationService;
 
     public UserResponse getCurrentUser(String userId) {
         User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User Not Found"));
@@ -27,13 +28,13 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        if (updateRequest.username() != null && !updateRequest.username().trim().isEmpty()) {
-            user.setUsername(updateRequest.username().trim());
+        if (updateRequest.getUsername() != null && !updateRequest.getUsername().trim().isEmpty()) {
+            user.setUsername(updateRequest.getUsername().trim());
         }
 
         // Update email
-        if (updateRequest.email() != null && !updateRequest.email().trim().isEmpty()) {
-            String newEmail = updateRequest.email().trim();
+        if (updateRequest.getEmail() != null && !updateRequest.getEmail().trim().isEmpty()) {
+            String newEmail = updateRequest.getEmail().trim();
             if (!user.getEmail().equals(newEmail)) {
                 if (userRepository.existsByEmail(newEmail)) {
                     throw new EmailAlreadyExistsException("Email already exists");
@@ -43,12 +44,23 @@ public class UserService {
         }
 
         // Update password
-        if (updateRequest.password() != null && !updateRequest.password().trim().isEmpty()) {
-            user.setPassword(passwordEncoder.encode(updateRequest.password()));
+        if (updateRequest.getPassword() != null && !updateRequest.getPassword().trim().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(updateRequest.getPassword()));
         }
 
-        if (updateRequest.role() != null && !updateRequest.role().toString().trim().isEmpty()) {
-            user.setRole(updateRequest.role());
+        if (updateRequest.getRole() != null && !updateRequest.getRole().toString().trim().isEmpty()) {
+            user.setRole(updateRequest.getRole());
+        }
+
+        if (updateRequest.isAvatarMediaIdProvided()) {
+            String avatarMediaId = updateRequest.getAvatarMediaId();
+
+            if (avatarMediaId == null || avatarMediaId.trim().isEmpty()) {
+                user.setAvatarMediaId(null);
+            } else {
+                mediaValidationService.validateAvatarOwnership(userId, avatarMediaId.trim());
+                user.setAvatarMediaId(avatarMediaId.trim());
+            }
         }
 
         User savedUser = userRepository.save(user);

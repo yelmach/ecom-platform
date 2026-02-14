@@ -17,6 +17,8 @@ public class RoutesConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
+                .route("media-objects", r -> r.path("/ecom-media/**")
+                        .uri("http://minio:9000"))
                 .route("user-service", r -> r.path("/auth/**", "/users/**")
                         .filters(f -> f.filter(authenticationFilter.apply(new AuthenticationFilter.Config())))
                         .uri("lb://USER-SERVICE"))

@@ -2,7 +2,6 @@ package ecom.gateway_service.config;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.http.HttpHeaders;
@@ -19,28 +18,23 @@ import reactor.core.publisher.Mono;
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
     private final JwtUtil jwtUtil;
-    private final String internalGatewayKey;
 
     private static final List<String> PUBLIC_PATHS = List.of(
             "/auth/login",
-            "/auth/register"
-    );
+            "/auth/register");
 
     private static final List<String> PUBLIC_GET_PATHS = List.of(
             "/products",
             "/media/images",
-            "/media/profile"
-    );
+            "/media/profile");
 
     private static final List<String> SELLER_PATHS = List.of(
             "/products",
-            "/media/images"
-    );
+            "/media/images");
 
-    public AuthenticationFilter(JwtUtil jwtUtil, @Value("${internal.gateway-key}") String internalGatewayKey) {
+    public AuthenticationFilter(JwtUtil jwtUtil) {
         super(Config.class);
         this.jwtUtil = jwtUtil;
-        this.internalGatewayKey = internalGatewayKey;
     }
 
     public static class Config {
@@ -58,8 +52,6 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 headers.remove("X-User-Id");
                 headers.remove("X-User-Email");
                 headers.remove("X-User-Role");
-                headers.remove("X-Internal-Gateway-Key");
-                headers.set("X-Internal-Gateway-Key", internalGatewayKey);
             }).build();
 
             // Skip authentication for public endpoints

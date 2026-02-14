@@ -6,8 +6,46 @@
 </div>
 
 <div class="dialog-body">
-  <div class="product-image">
-    <img src="https://placehold.co/400x280/222/666?text={{ product.name }}" [alt]="product.name" />
+  <div class="product-gallery" (touchstart)="onTouchStart($event)" (touchend)="onTouchEnd($event)">
+    <img [src]="currentImageUrl()" [alt]="product.name + ' image ' + (activeImageIndex() + 1)" />
+
+    @if (hasMultipleImages()) {
+      <button
+        mat-icon-button
+        type="button"
+        class="gallery-nav prev"
+        (click)="previousImage()"
+        aria-label="Previous image"
+      >
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        type="button"
+        class="gallery-nav next"
+        (click)="nextImage()"
+        aria-label="Next image"
+      >
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    }
+
+    @if (hasMultipleImages()) {
+      <div class="gallery-dots" aria-hidden="true">
+        @for (url of imageUrls(); track url; let i = $index) {
+          <button
+            type="button"
+            class="dot"
+            [class.active]="i === activeImageIndex()"
+            (click)="goToImage(i)"
+          ></button>
+        }
+      </div>
+    }
+
+    @if (hasMultipleImages()) {
+      <div class="image-counter">{{ activeImageIndex() + 1 }} / {{ imageUrls().length }}</div>
+    }
   </div>
 
   <div class="product-detail-info">

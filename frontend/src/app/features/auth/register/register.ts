@@ -6,10 +6,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { finalize } from 'rxjs';
+import { catchError, finalize, map, of, switchMap, tap } from 'rxjs';
 import { RegisterRequest } from '../../../core/models/auth';
 import { AuthService } from '../../../core/services/auth.service';
 import { UserRole } from '../../../core/models/user';
+import { MediaService } from '../../../core/services/media.service';
+import { UserService } from '../../../core/services/user.service';
 
 @Component({
   selector: 'app-register',
@@ -27,6 +29,8 @@ import { UserRole } from '../../../core/models/user';
 })
 export class Register {
   private authService = inject(AuthService);
+  private mediaService = inject(MediaService);
+  private userService = inject(UserService);
   private router = inject(Router);
 
   readonly registerForm = new FormGroup({
@@ -53,7 +57,10 @@ export class Register {
   readonly hidePassword = signal(true);
   readonly isSubmitting = signal(false);
   readonly submitError = signal('');
+  readonly avatarUploadWarning = signal('');
+  readonly avatarPreview = signal<string | null>(null);
   fieldErrors = signal<{ [key: string]: string }>({});
+  private avatarFile: File | null = null;
 
   selectRole(role: UserRole): void {
     this.registerForm.controls.role.setValue(role);
@@ -66,6 +73,7 @@ export class Register {
   onSubmit(): void {
     this.fieldErrors.set({});
     this.submitError.set('');
+    this.avatarUploadWarning.set('');
 
     Object.keys(this.registerForm.controls).forEach((key) => {
       const control = this.registerForm.get(key);
@@ -84,7 +92,27 @@ export class Register {
 
     this.authService
       .register(payload)
-      .pipe(finalize(() => this.isSubmitting.set(false)))
+      .pipe(
+        switchMap((registeredUser) => {
+          if (!this.avatarFile) {
+            return of(registeredUser);
+          }
+
+          return this.mediaService.uploadProfile(this.avatarFile).pipe(
+            switchMap((profileImage) =>
+              this.userService.updateProfile({ avatarMediaId: profileImage.avatar.id })),
+            tap((updatedUser) => {
+              this.authService.currentUser.set(updatedUser);
+            }),
+            map(() => registeredUser),
+            catchError(() => {
+              this.avatarUploadWarning.set('Account created, but avatar upload failed. You can retry from profile settings.');
+              return of(registeredUser);
+            }),
+          );
+        }),
+        finalize(() => this.isSubmitting.set(false)),
+      )
       .subscribe({
         next: (user) => {
           const redirectPath = user.role === 'SELLER' ? '/seller' : '/shop';
@@ -92,6 +120,36 @@ export class Register {
         },
         error: (error: HttpErrorResponse) => this.handleSubmitError(error),
       });
+  }
+
+  onAvatarSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      this.submitError.set('Avatar must be an image file.');
+      input.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      this.submitError.set('Avatar must be 2 MB or less.');
+      input.value = '';
+      return;
+    }
+
+    this.avatarFile = file;
+    this.avatarPreview.set(URL.createObjectURL(file));
+    input.value = '';
+  }
+
+  clearAvatar(): void {
+    this.avatarFile = null;
+    this.avatarPreview.set(null);
   }
 
   getErrorMessage(fieldName: string): string {

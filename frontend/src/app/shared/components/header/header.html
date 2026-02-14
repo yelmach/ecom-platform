@@ -8,8 +8,8 @@
     }
 
     <button class="avatar" (click)="openProfile()" aria-label="Open profile">
-      @if (currentUser()?.avatarUrl) {
-      <img [src]="currentUser()!.avatarUrl!" [alt]="currentUser()!.username" />
+      @if (avatarUrl()) {
+      <img [src]="avatarUrl()!" [alt]="currentUser()!.username" />
       } @else {
       <mat-icon>account_circle</mat-icon>
       }
