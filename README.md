@@ -1,70 +1,99 @@
 # ecom-platform
 
-## Media Integration (User + Product + Frontend)
+Microservices-based e-commerce platform with a Spring Boot backend and Angular frontend.
 
-### User avatar reference
-- User profile now stores `avatarMediaId` (not `avatarUrl`).
-- `PATCH /users/me` accepts `avatarMediaId`:
-  - set `avatarMediaId` to a media ID to link avatar
-  - set `avatarMediaId` to `null` to remove avatar reference
-- Register flow is two-step:
-1. `POST /auth/register`
-2. Optional `POST /media/profile` with avatar file
-3. `PATCH /users/me` with `{ "avatarMediaId": "<uploadedAvatarId>" }`
+## Architecture
 
-### Product media reference
-- Product keeps `mediaIds` as canonical image references.
-- Product creation requires empty `mediaIds`:
-1. `POST /products` with `mediaIds: []`
-2. `POST /media/images` with `productId` + files
-3. `PUT /products/{id}` with uploaded media IDs
-- Product update validates submitted `mediaIds` against `GET /media/images/{productId}` in media-service.
+Backend services:
+- `discovery-service` (Eureka service registry)
+- `gateway-service` (single entrypoint, JWT auth, routing)
+- `user-service` (auth + profile)
+- `product-service` (catalog management)
+- `media-service` (image upload + media metadata)
 
-### Media-service usage
-- Product images:
-  - `POST /media/images` (`productId`, `files[]`, max 5 files)
-  - `GET /media/images/{productId}`
-- Profile avatar:
-  - `POST /media/profile` (`file`)
-  - `GET /media/profile/{userId}`
+Supporting infrastructure:
+- MongoDB
+- MinIO (object storage)
 
-### Frontend behavior
-- Registration supports optional avatar upload.
-- Profile dialog supports avatar upload and avatar removal (`avatarMediaId: null`).
-- Product create/edit uploads images through media-service and persists returned IDs.
-- Shop/seller/product details resolve image URLs via `GET /media/images/{productId}`.
+Frontend:
+- Angular app consuming gateway APIs
 
-## Backend Docker Runbook
+## Service docs
+
+- `backend/discovery-service/README.md`
+- `backend/gateway-service/README.md`
+- `backend/user-service/README.md`
+- `backend/product-service/README.md`
+- `backend/media-service/README.md`
+- `frontend/README.md`
+
+## Quick start (Docker backend + local frontend)
 
 ### Prerequisites
 - Docker + Docker Compose
-- OpenSSL (for local self-signed cert generation)
+- OpenSSL
+- Node.js + npm
 
-### Generate gateway TLS certificates (one-time)
-1. `cd backend`
-2. `mkdir -p certs`
-3. `openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout certs/gateway.key -out certs/gateway.crt -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`
-4. `openssl pkcs12 -export -out certs/gateway.p12 -inkey certs/gateway.key -in certs/gateway.crt -name gateway -passout pass:changeit`
+### 1) Generate gateway TLS certs (one-time)
+```bash
+cd backend
+mkdir -p certs
+openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 \
+  -keyout certs/gateway.key \
+  -out certs/gateway.crt \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+openssl pkcs12 -export \
+  -out certs/gateway.p12 \
+  -inkey certs/gateway.key \
+  -in certs/gateway.crt \
+  -name gateway \
+  -passout pass:changeit
+```
 
-### Run backend stack
-1. `cd backend`
-2. `docker compose --env-file .env.docker up --build`
+### 2) Run backend stack
+```bash
+cd backend
+docker compose --env-file .env.docker up --build
+```
 
-### Stop backend stack
-1. `cd backend`
-2. `docker compose down`
+### 3) Run frontend
+```bash
+cd frontend
+npm install
+npm run start:https
+```
 
-### Stop and remove data volumes
-1. `cd backend`
-2. `docker compose down -v`
+## Main URLs
 
-### Run frontend over HTTPS (ng serve)
-1. `cd frontend`
-2. `npm install`
-3. `npm run start:https`
-
-### Expected reachable URLs
 - Frontend: `https://localhost:4200`
 - Gateway: `https://localhost:8443`
+- Eureka: `http://localhost:8761`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
+
+## API flow notes
+
+### Auth and profile avatar
+1. `POST /auth/register`
+2. Optional avatar upload: `POST /media/profile`
+3. Link avatar to profile: `PATCH /users/me` with `avatarMediaId`
+
+### Product and images
+1. Create product: `POST /products` with `mediaIds: []`
+2. Upload images: `POST /media/images` with `productId` + `files[]`
+3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
+
+## Stop commands
+
+Stop backend:
+```bash
+cd backend
+docker compose down
+```
+
+Stop backend and remove volumes:
+```bash
+cd backend
+docker compose down -v
+```
