@@ -1,5 +1,10 @@
 server:
   port: ${GATEWAY_PORT}
+  ssl:
+    enabled: ${GATEWAY_SSL_ENABLED:false}
+    key-store: ${GATEWAY_SSL_KEY_STORE:}
+    key-store-password: ${GATEWAY_SSL_KEY_STORE_PASSWORD:}
+    key-store-type: ${GATEWAY_SSL_KEY_STORE_TYPE:PKCS12}
 
 spring:
   config:

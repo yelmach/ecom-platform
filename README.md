@@ -38,7 +38,13 @@
 
 ### Prerequisites
 - Docker + Docker Compose
-- `backend/.env` present (you can copy from `backend/.env.example`)
+- OpenSSL (for local self-signed cert generation)
+
+### Generate gateway TLS certificates (one-time)
+1. `cd backend`
+2. `mkdir -p certs`
+3. `openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout certs/gateway.key -out certs/gateway.crt -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`
+4. `openssl pkcs12 -export -out certs/gateway.p12 -inkey certs/gateway.key -in certs/gateway.crt -name gateway -passout pass:changeit`
 
 ### Run backend stack
 1. `cd backend`
@@ -52,7 +58,13 @@
 1. `cd backend`
 2. `docker compose down -v`
 
+### Run frontend over HTTPS (ng serve)
+1. `cd frontend`
+2. `npm install`
+3. `npm run start:https`
+
 ### Expected reachable URLs
-- Gateway: `http://localhost:8080`
+- Frontend: `https://localhost:4200`
+- Gateway: `https://localhost:8443`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`

@@ -83,8 +83,8 @@ services:
       MONGO_PORT: 27017
       EUREKA_HOST: discovery-service
       EUREKA_PORT: 8761
-      MINIO_ENDPOINT: http://minio:9000
-      MEDIA_PUBLIC_BASE_URL: http://localhost:9000/ecom-media
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL}
     depends_on:
       mongo:
         condition: service_healthy
@@ -177,12 +177,17 @@ services:
     env_file:
       - .env.docker
     environment:
-      GATEWAY_PORT: 8080
+      GATEWAY_PORT: ${GATEWAY_PORT}
       EUREKA_HOST: discovery-service
       EUREKA_PORT: 8761
       JWT_PUBLIC_KEY_PATH: /opt/keys/public.pem
+      GATEWAY_SSL_ENABLED: ${GATEWAY_SSL_ENABLED}
+      GATEWAY_SSL_KEY_STORE: ${GATEWAY_SSL_KEY_STORE}
+      GATEWAY_SSL_KEY_STORE_PASSWORD: ${GATEWAY_SSL_KEY_STORE_PASSWORD}
+      GATEWAY_SSL_KEY_STORE_TYPE: ${GATEWAY_SSL_KEY_STORE_TYPE}
     volumes:
       - ./keys:/opt/keys:ro
+      - ./certs:/opt/certs:ro
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -193,10 +198,10 @@ services:
       media-service:
         condition: service_healthy
     ports:
-      - "${GATEWAY_PORT}:8080"
+      - "${GATEWAY_PORT}:8443"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:8443/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
       retries: 15

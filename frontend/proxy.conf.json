@@ -1,21 +1,21 @@
 {
   "/auth": {
-    "target": "http://localhost:8080",
+    "target": "https://localhost:8443",
     "secure": false,
     "changeOrigin": true
   },
   "/users": {
-    "target": "http://localhost:8080",
+    "target": "https://localhost:8443",
     "secure": false,
     "changeOrigin": true
   },
   "/products": {
-    "target": "http://localhost:8080",
+    "target": "https://localhost:8443",
     "secure": false,
     "changeOrigin": true
   },
   "/media": {
-    "target": "http://localhost:8080",
+    "target": "https://localhost:8443",
     "secure": false,
     "changeOrigin": true
   }
