@@ -69,7 +69,6 @@ export class ProductList implements OnInit {
 
   private loadProductImageUrls(products: Product[]): void {
     if (!products.length) {
-      this.productImageUrls.set({});
       return;
     }
 
@@ -84,13 +83,17 @@ export class ProductList implements OnInit {
     );
 
     forkJoin(requests).subscribe((results) => {
-      const imageMap: Record<string, string> = {};
-      results.forEach((result) => {
-        if (result.url) {
-          imageMap[result.productId] = result.url;
-        }
+      this.productImageUrls.update((current) => {
+        const imageMap = { ...current };
+        results.forEach((result) => {
+          if (result.url) {
+            imageMap[result.productId] = result.url;
+          } else {
+            delete imageMap[result.productId];
+          }
+        });
+        return imageMap;
       });
-      this.productImageUrls.set(imageMap);
     });
   }
 }
