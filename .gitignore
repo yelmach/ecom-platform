@@ -6,6 +6,9 @@
 # RSA Keys
 *.pem
 
+# certs
+backend/certs/*
+
 # IDE
 .idea/
 *.iml
