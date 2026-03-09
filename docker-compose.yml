@@ -17,8 +17,8 @@ services:
       test: ["CMD-SHELL", "mongosh --quiet -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 5
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -41,8 +41,8 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 5
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -51,20 +51,19 @@ services:
   # ----------------------------
   discovery-service:
     build:
-      context: ./discovery-service
+      context: ./backend/discovery-service
     container_name: ecom-discovery-service
     env_file:
-      - .env.docker
-    environment:
-      EUREKA_HOST: discovery-service
-      EUREKA_PORT: 8761
+      - ./backend/docker.env
+    ports:
+      - "${EUREKA_PORT}:${EUREKA_PORT}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${EUREKA_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 10
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -73,18 +72,10 @@ services:
   # ----------------------------
   media-service:
     build:
-      context: ./media-service
+      context: ./backend/media-service
     container_name: ecom-media-service
     env_file:
-      - .env.docker
-    environment:
-      MEDIA_SERVICE_PORT: 8083
-      MONGO_HOST: mongo
-      MONGO_PORT: 27017
-      EUREKA_HOST: discovery-service
-      EUREKA_PORT: 8761
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      MEDIA_PUBLIC_BASE_URL: ${MEDIA_PUBLIC_BASE_URL}
+      - ./backend/docker.env
     depends_on:
       mongo:
         condition: service_healthy
@@ -94,11 +85,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${MEDIA_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 10
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -107,20 +98,12 @@ services:
   # ----------------------------
   user-service:
     build:
-      context: ./user-service
+      context: ./backend/user-service
     container_name: ecom-user-service
     env_file:
-      - .env.docker
-    environment:
-      USER_SERVICE_PORT: 8081
-      MONGO_HOST: mongo
-      MONGO_PORT: 27017
-      EUREKA_HOST: discovery-service
-      EUREKA_PORT: 8761
-      MEDIA_SERVICE_BASE_URL: http://media-service:8083
-      JWT_PRIVATE_KEY_PATH: /opt/keys/private.pem
+      - ./backend/docker.env
     volumes:
-      - ./keys:/opt/keys:ro
+      - ./backend/keys:/opt/keys:ro
     depends_on:
       mongo:
         condition: service_healthy
@@ -128,11 +111,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 10
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -141,17 +124,10 @@ services:
   # ----------------------------
   product-service:
     build:
-      context: ./product-service
+      context: ./backend/product-service
     container_name: ecom-product-service
     env_file:
-      - .env.docker
-    environment:
-      PRODUCT_SERVICE_PORT: 8082
-      MONGO_HOST: mongo
-      MONGO_PORT: 27017
-      EUREKA_HOST: discovery-service
-      EUREKA_PORT: 8761
-      MEDIA_SERVICE_BASE_URL: http://media-service:8083
+      - ./backend/docker.env
     depends_on:
       mongo:
         condition: service_healthy
@@ -159,11 +135,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 10
+      start_period: 10s
     networks:
       - ecom-network
 
@@ -172,22 +148,13 @@ services:
   # ----------------------------
   gateway-service:
     build:
-      context: ./gateway-service
+      context: ./backend/gateway-service
     container_name: ecom-gateway-service
     env_file:
-      - .env.docker
-    environment:
-      GATEWAY_PORT: ${GATEWAY_PORT}
-      EUREKA_HOST: discovery-service
-      EUREKA_PORT: 8761
-      JWT_PUBLIC_KEY_PATH: /opt/keys/public.pem
-      GATEWAY_SSL_ENABLED: ${GATEWAY_SSL_ENABLED}
-      GATEWAY_SSL_KEY_STORE: ${GATEWAY_SSL_KEY_STORE}
-      GATEWAY_SSL_KEY_STORE_PASSWORD: ${GATEWAY_SSL_KEY_STORE_PASSWORD}
-      GATEWAY_SSL_KEY_STORE_TYPE: ${GATEWAY_SSL_KEY_STORE_TYPE}
+      - ./backend/docker.env
     volumes:
-      - ./keys:/opt/keys:ro
-      - ./certs:/opt/certs:ro
+      - ./backend/keys:/opt/keys:ro
+      - ./backend/certs:/opt/certs:ro
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -201,11 +168,11 @@ services:
       - "${GATEWAY_PORT}:8443"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -kfsS https://localhost:8443/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 30s
+      retries: 10
+      start_period: 10s
     networks:
       - ecom-network
 

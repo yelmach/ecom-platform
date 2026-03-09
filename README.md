@@ -27,42 +27,96 @@ Frontend:
 - `backend/media-service/README.md`
 - `frontend/README.md`
 
-## Quick start (Docker backend + local frontend)
+## Config files
 
-### Prerequisites
+- `backend/.env` for manual local service runs (dev mode).
+- `backend/docker.env` for Docker Compose runs (prod and dev infra).
+- `backend/.env.example` and `backend/docker.env.example` as templates.
+
+## Prerequisites
+
 - Docker + Docker Compose
 - OpenSSL
+- Java 17
 - Node.js + npm
 
-### 1) Generate gateway TLS certs (one-time)
+## One-time setup
+
+### 1) Generate gateway TLS certs (for HTTPS gateway)
 ```bash
-cd backend
-mkdir -p certs
+mkdir -p backend/certs
 openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 \
-  -keyout certs/gateway.key \
-  -out certs/gateway.crt \
+  -keyout backend/certs/gateway.key \
+  -out backend/certs/gateway.crt \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 openssl pkcs12 -export \
-  -out certs/gateway.p12 \
-  -inkey certs/gateway.key \
-  -in certs/gateway.crt \
+  -out backend/certs/gateway.p12 \
+  -inkey backend/certs/gateway.key \
+  -in backend/certs/gateway.crt \
   -name gateway \
   -passout pass:changeit
 ```
 
-### 2) Run backend stack
+### 2) Generate JWT RSA keys (user-service signs, gateway verifies)
 ```bash
-cd backend
-docker compose --env-file .env.docker up --build
+mkdir -p backend/keys
+openssl genpkey -algorithm RSA -out backend/keys/private.pem -pkeyopt rsa_keygen_bits:2048
+openssl pkey -in backend/keys/private.pem -pubout -out backend/keys/public.pem
 ```
 
-### 3) Run frontend
+## Launch modes
+
+### Prod mode (all backend + infra in Docker)
+
+From repo root:
+```bash
+make prod-up
+```
+
+Stop:
+```bash
+make prod-down
+```
+
+Stop and remove volumes:
+```bash
+make prod-down-v
+```
+
+Direct Docker Compose equivalent:
+```bash
+docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+```
+
+### Dev mode (infra in Docker, services/frontend manual)
+
+1. Start infra (`mongo`, `minio`, `discovery-service`) from repo root:
+```bash
+make dev-infra-up
+```
+
+2. Run backend services manually (each in a separate terminal):
+```bash
+cd backend/media-service && ./mvnw spring-boot:run
+cd backend/user-service && ./mvnw spring-boot:run
+cd backend/product-service && ./mvnw spring-boot:run
+cd backend/gateway-service && ./mvnw spring-boot:run
+```
+
+3. Run frontend:
 ```bash
 cd frontend
 npm install
 npm run start:https
 ```
+
+4. Stop infra:
+```bash
+make dev-infra-down
+```
+
+Note: in dev mode, backend services load local env values from `backend/.env`.
 
 ## Main URLs
 
@@ -84,16 +138,7 @@ npm run start:https
 2. Upload images: `POST /media/images` with `productId` + `files[]`
 3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
 
-## Stop commands
+## Compatibility note
 
-Stop backend:
-```bash
-cd backend
-docker compose down
-```
-
-Stop backend and remove volumes:
-```bash
-cd backend
-docker compose down -v
-```
+- Canonical compose files are at repo root: `docker-compose.yml` and `docker-compose.dev.yml`.
+- `backend/docker-compose.yml` is kept for compatibility with existing commands.
