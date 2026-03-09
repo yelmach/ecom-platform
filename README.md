@@ -32,6 +32,11 @@ Frontend:
 - `backend/.env` for manual local service runs (dev mode).
 - `backend/docker.env` for Docker Compose runs (prod and dev infra).
 - `backend/.env.example` and `backend/docker.env.example` as templates.
+- Mongo logical DB isolation uses:
+  - `MONGO_USER_DATABASE`
+  - `MONGO_PRODUCT_DATABASE`
+  - `MONGO_MEDIA_DATABASE`
+  on the same MongoDB instance.
 
 ## Prerequisites
 
