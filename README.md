@@ -79,6 +79,8 @@ From repo root:
 make prod-up
 ```
 
+This starts backend services plus the Dockerized frontend on `https://localhost:4200`.
+
 Stop:
 ```bash
 make prod-down
@@ -122,6 +124,7 @@ make dev-infra-down
 ```
 
 Note: in dev mode, backend services load local env values from `backend/.env`.
+Frontend in dev mode still runs manually with `npm run start:https`.
 
 ## Main URLs
 
@@ -147,3 +150,4 @@ Note: in dev mode, backend services load local env values from `backend/.env`.
 
 - Canonical compose files are at repo root: `docker-compose.yml` and `docker-compose.dev.yml`.
 - `backend/docker-compose.yml` is kept for compatibility with existing commands.
+- Frontend Docker runtime uses Nginx with TLS certs from `backend/certs` and proxies API routes to `gateway-service`.

@@ -176,6 +176,24 @@ services:
     networks:
       - ecom-network
 
+  # ----------------------------
+  # FRONTEND (Angular + Nginx)
+  # ----------------------------
+  frontend:
+    build: ./frontend
+    container_name: ecom-frontend
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./backend/certs/gateway.crt:/etc/nginx/certs/gateway.crt:ro
+      - ./backend/certs/gateway.key:/etc/nginx/certs/gateway.key:ro
+    restart: unless-stopped
+    networks:
+      - ecom-network
+
 # ----------------------------
 # NETWORKS & VOLUMES
 # ----------------------------

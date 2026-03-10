@@ -5,7 +5,7 @@ COMPOSE_DEV := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.dev.ym
 .PHONY: prod-up prod-down prod-down-v dev-infra-up dev-infra-down
 
 prod-up:
-	$(COMPOSE_PROD) up --build -d
+	$(COMPOSE_PROD) up --build
 
 prod-down:
 	$(COMPOSE_PROD) down
@@ -14,7 +14,7 @@ prod-down-v:
 	$(COMPOSE_PROD) down -v
 
 dev-infra-up:
-	$(COMPOSE_DEV) up --build -d
+	$(COMPOSE_DEV) up --build
 
 dev-infra-down:
 	$(COMPOSE_DEV) down
