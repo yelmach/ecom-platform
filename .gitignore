@@ -1,10 +1,13 @@
 # Environment variables
-.env
+*.env
 .env.local
 .env.*.local
 
 # RSA Keys
 *.pem
+
+# certs
+backend/certs/*
 
 # IDE
 .idea/
