@@ -124,4 +124,13 @@ public class UserServiceTest {
         verify(mediaValidationService).validateAvatarOwnership(userId, "media-123");
         verify(userRepository).save(mockUser);
     }
+
+    @Test
+    void updateProfile_ThrowsUserNotFoundException() {
+        UpdateRequest request = new UpdateRequest();
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> userService.UpdateProfile(userId, request));
+        verify(userRepository, never()).save(any(User.class));
+    }
 }
