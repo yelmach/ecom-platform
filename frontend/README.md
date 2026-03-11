@@ -4,7 +4,8 @@
 Angular app for the marketplace UI (auth, profile, product browsing, seller dashboard, and media upload flows).
 
 ## How it connects
-- Talks to the gateway at `https://localhost:8443`
+- In local dev (`npm run start:https`), proxy forwards API routes to `https://localhost:8443`
+- In Docker prod mode, Nginx in the frontend container proxies API routes to `https://gateway-service:8443`
 - Uses endpoints under `/auth`, `/users`, `/products`, `/media`
 - Stores JWT in browser storage (`jwt_token`)
 
@@ -29,3 +30,4 @@ npm start
 ## Notes
 - `start:https` reuses `backend/certs/gateway.crt` and `backend/certs/gateway.key`
 - Proxy config forwards API routes to `https://localhost:8443`
+- Dockerized frontend serves the built app via Nginx on `https://localhost:4200`

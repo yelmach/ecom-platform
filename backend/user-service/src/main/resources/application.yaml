@@ -7,7 +7,7 @@ spring:
   application:
     name: user-service
   mongodb:
-    uri: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}?authSource=admin
+    uri: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_USER_DATABASE}?authSource=admin
     auto-index-creation: true
 
 eureka:
