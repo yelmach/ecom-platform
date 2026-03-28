@@ -26,7 +26,6 @@ pipeline {
                     services.each { service ->
                         echo "Building ${service}..."
                         dir("backend/${service}") {
-                            // Ensure the wrapper is executable
                             sh './mvnw clean package -DskipTests'
                         }
                     }
