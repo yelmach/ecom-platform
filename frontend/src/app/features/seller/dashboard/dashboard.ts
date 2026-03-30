@@ -85,8 +85,11 @@ export class Dashboard implements OnInit {
   }
 
   deleteProduct(product: Product): void {
-    this.productService.deleteProduct(product.id).subscribe(() => {
-      this.resetAndReload();
+    this.productService.deleteProduct(product.id).subscribe({
+      next: () => {
+        this.resetAndReload();
+      },
+      error: (err) => console.error('Failed to delete product', err),
     });
   }
 
