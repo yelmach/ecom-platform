@@ -1,0 +1,16 @@
+services:
+  jenkins:
+    build: .
+    container_name: jenkins-server
+    user: root # Runs as root to allow Docker operations inside Jenkins
+    ports:
+      - "8080:8080" # Web UI port
+      - "50000:50000" # Build agent port
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      # Mount the Docker socket so Jenkins can build Docker images for your microservices
+      - /var/run/docker.sock:/var/run/docker.sock 
+    restart: unless-stopped
+
+volumes:
+  jenkins_data:
