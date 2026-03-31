@@ -107,9 +107,8 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: 'N/A'}
+Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
 Commit: ${env.GIT_COMMIT ?: 'N/A'}
-Build URL: ${env.BUILD_URL}
 """
                 )
             }
@@ -129,9 +128,8 @@ Build URL: ${env.BUILD_URL}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: 'N/A'}
+Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
 Commit: ${env.GIT_COMMIT ?: 'N/A'}
-Build URL: ${env.BUILD_URL}
 """
                 )
             }
