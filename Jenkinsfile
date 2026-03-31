@@ -1,8 +1,18 @@
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
     tools {
-        nodejs 'nodejs' 
+        nodejs 'nodejs'
+    }
+
+    environment {
+        CHROME_BIN = '/usr/bin/chromium'
+        BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'
     }
 
     stages {
@@ -15,29 +25,53 @@ pipeline {
         stage('Build Backend') {
             steps {
                 script {
-                    def services = [
-                        'discovery-service', 
-                        'gateway-service', 
-                        'user-service', 
-                        'product-service', 
-                        'media-service'
-                    ]
-                    
+                    def services = env.BACKEND_SERVICES.tokenize(' ')
+
                     services.each { service ->
                         echo "Building ${service}..."
                         dir("backend/${service}") {
-                            sh './mvnw clean package -DskipTests'
+                            sh './mvnw -B -ntp clean package -DskipTests'
                         }
                     }
                 }
             }
         }
 
+        stage('Test Backend') {
+            steps {
+                script {
+                    def services = env.BACKEND_SERVICES.tokenize(' ')
+
+                    services.each { service ->
+                        echo "Running tests for ${service}..."
+                        dir("backend/${service}") {
+                            sh './mvnw -B -ntp test'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Install Frontend Dependencies') {
+            steps {
+                dir('frontend') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        stage('Test Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage'
+                }
+            }
+        }
+
         stage('Build Frontend') {
             steps {
-                dir('frontend') { 
-                    echo 'Installing dependencies and building Angular app...'
-                    sh 'npm ci'
+                dir('frontend') {
+                    echo 'Building Angular app...'
                     sh 'npm run build'
                 }
             }
@@ -46,13 +80,15 @@ pipeline {
 
     post {
         always {
+            junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'frontend/coverage/**'
             echo 'Pipeline execution complete.'
         }
         success {
-            echo 'Build Successful!'
+            echo 'Build and tests succeeded.'
         }
         failure {
-            echo 'Build Failed. Please check the logs.'
+            echo 'Pipeline failed. Check stage logs and published reports.'
         }
     }
 }
