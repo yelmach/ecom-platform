@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        string(
+            name: 'EMAIL_RECIPIENTS',
+            defaultValue: 'beytour.safae@gmail.com',
+            description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
+        )
+    }
+
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -86,9 +94,47 @@ pipeline {
         }
         success {
             echo 'Build and tests succeeded.'
+            script {
+                if (!params.EMAIL_RECIPIENTS?.trim()) {
+                    echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
+                    return
+                }
+
+                mail(
+                    to: params.EMAIL_RECIPIENTS.trim(),
+                    subject: "[Jenkins] SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """Pipeline succeeded.
+
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Build URL: ${env.BUILD_URL}
+"""
+                )
+            }
         }
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
+            script {
+                if (!params.EMAIL_RECIPIENTS?.trim()) {
+                    echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
+                    return
+                }
+
+                mail(
+                    to: params.EMAIL_RECIPIENTS.trim(),
+                    subject: "[Jenkins] FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """Pipeline failed.
+
+Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Build URL: ${env.BUILD_URL}
+"""
+                )
+            }
         }
     }
 }

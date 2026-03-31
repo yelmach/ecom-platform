@@ -94,6 +94,7 @@ Then install suggested plugins and create your admin user.
 - Git
 - NodeJS
 - JUnit
+- Mailer
 
 ### Global Tool configuration
 
@@ -130,7 +131,7 @@ Reference file:
 
 - [Jenkinsfile](../Jenkinsfile)
 
-Explination of content : 
+Explanation of content:
 
 - `pipeline {}`
   - starts a declarative Jenkins pipeline block.
@@ -149,6 +150,11 @@ Explination of content :
 - `nodejs 'nodejs'`
   - use Jenkins NodeJS tool installation named `nodejs`.
 
+- `parameters {}`
+  - defines runtime build parameters.
+- `EMAIL_RECIPIENTS`
+  - comma-separated email recipients used by success/failure email notifications.
+
 - `environment {}`
   - define pipeline-wide environment variables.
 - `CHROME_BIN = '/usr/bin/chromium'`
@@ -164,10 +170,10 @@ Explination of content :
 
 - `stage('Build Backend')`
   - enters scripted block to loop over backend services.
-  - `line 28`: converts `BACKEND_SERVICES` string to list using `tokenize(' ')`.
-  - `line 30`: iterates service-by-service.
-  - `line 32`: changes into `backend/<service>` directory.
-  - `line 33`: runs Maven build command:
+  - converts `BACKEND_SERVICES` string to list using `tokenize(' ')`.
+  - iterates service-by-service.
+  - changes into `backend/<service>` directory.
+  - runs Maven build command:
     - `clean package` builds jar
     - `-DskipTests` skips tests here (tests run in dedicated stage).
 
@@ -300,6 +306,36 @@ Check outputs in Jenkins build page:
 - `Console Output` for logs
 - `Test Result` for backend JUnit
 - `Artifacts` for frontend coverage
+
+## 8.1) Configure Email Notifications
+
+This pipeline supports email notifications with Jenkins job parameter:
+
+- `EMAIL_RECIPIENTS` (comma-separated recipients)
+
+Before it can send emails, configure SMTP in Jenkins:
+
+1. Go to `Manage Jenkins -> System`
+2. Find `E-mail Notification`
+3. Configure:
+   - SMTP server
+   - SMTP port
+   - authentication username/password (if required)
+   - TLS/SSL settings based on your provider
+4. Save
+5. Use `Test configuration by sending test e-mail`
+
+Then in your pipeline job:
+
+1. Click `Build with Parameters`
+2. Set `EMAIL_RECIPIENTS` (example: `you@example.com,team@example.com`)
+3. Run a build
+
+Expected behavior:
+
+- On success: Jenkins sends a success email
+- On failure: Jenkins sends a failure email
+- If recipients are empty: pipeline logs a skip message and does not fail
 
 ## 9) Common Issues and Fixes
 
