@@ -4,7 +4,7 @@ pipeline {
     parameters {
         string(
             name: 'EMAIL_RECIPIENTS',
-            defaultValue: 'beytour.safae@gmail.com',
+            defaultValue: 'beytour.safae@gmail.com,beyour.safae@gmail.com',
             description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
         )
     }
