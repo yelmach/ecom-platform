@@ -21,6 +21,9 @@ pipeline {
     environment {
         CHROME_BIN = '/usr/bin/chromium'
         BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'
+        SONAR_PROJECT_KEY = 'ecom-platform'
+        SONAR_HOST_URL = 'http://host.docker.internal:9000'
+        SONAR_TOKEN = credentials('sonar-token-ecom')
     }
 
     stages {
@@ -82,6 +85,29 @@ pipeline {
                     echo 'Building Angular app...'
                     sh 'npm run build'
                 }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    if (!env.SONAR_HOST_URL?.trim() || !env.SONAR_TOKEN?.trim()) {
+                        error('SONAR_HOST_URL and SONAR_TOKEN must be configured in Jenkins environment/credentials.')
+                    }
+                }
+
+                sh '''#!/bin/bash
+set -euo pipefail
+
+docker run --rm \
+  -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+  -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -v "$PWD:/usr/src" \
+  sonarsource/sonar-scanner-cli:latest \
+  -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
+  -Dsonar.qualitygate.wait=true \
+  -Dsonar.qualitygate.timeout=300
+'''
             }
         }
     }

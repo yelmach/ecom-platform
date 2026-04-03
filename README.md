@@ -29,6 +29,7 @@ Frontend:
 - `frontend/README.md`
 - `docs/frontend-unit-testing-guide.md` (Jasmine/Karma frontend testing walkthrough)
 - `docs/jenkins-ci-guide.md` (Jenkins setup + CI pipeline walkthrough)
+- `docs/sonarqube-integration-guide.md` (SonarQube setup + quality gate workflow)
 
 ## Config files
 
@@ -124,6 +125,24 @@ npm run start:https
 4. Stop infra:
 ```bash
 make dev-infra-down
+```
+
+### SonarQube (quality analysis)
+
+Start SonarQube locally:
+
+```bash
+make sonar-up
+```
+
+Open:
+
+`http://localhost:9000`
+
+Stop:
+
+```bash
+make sonar-down
 ```
 
 Note: in dev mode, backend services load local env values from `backend/.env`.

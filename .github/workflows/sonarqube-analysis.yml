@@ -1,0 +1,66 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_SERVICES: discovery-service gateway-service user-service product-service media-service
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Backend Tests With Coverage
+        run: |
+          set -euo pipefail
+          for service in ${BACKEND_SERVICES}; do
+            echo "Running backend tests for ${service}"
+            (cd "backend/${service}" && ./mvnw -B -ntp test)
+          done
+
+      - name: Frontend Tests With Coverage
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage
+
+      - name: SonarQube Scan And Quality Gate
+        run: |
+          set -euo pipefail
+          if [ -z "${SONAR_HOST_URL}" ] || [ -z "${SONAR_TOKEN}" ]; then
+            echo "SONAR_HOST_URL and SONAR_TOKEN GitHub secrets are required."
+            exit 1
+          fi
+
+          docker run --rm \
+            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+            -e SONAR_TOKEN="${SONAR_TOKEN}" \
+            -v "${GITHUB_WORKSPACE}:/usr/src" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=ecom-platform \
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=300

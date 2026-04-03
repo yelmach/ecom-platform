@@ -12,7 +12,8 @@ In this project, Jenkins does these tasks automatically:
 4. Install frontend dependencies
 5. Run frontend unit tests
 6. Build frontend app
-7. Publish test/coverage outputs in Jenkins
+7. Run SonarQube static analysis with quality gate enforcement
+8. Publish test/coverage outputs in Jenkins
 
 This is Continuous Integration (CI): every code change is validated quickly and consistently.
 
@@ -215,6 +216,14 @@ Current pipeline stages:
 4. `Install Frontend Dependencies`
 5. `Test Frontend`
 6. `Build Frontend`
+7. `SonarQube Analysis`
+
+For `SonarQube Analysis`, Jenkins must provide:
+
+- `SONAR_HOST_URL`
+- `SONAR_TOKEN`
+
+The pipeline waits for the quality gate result and fails automatically if the gate is not green.
 
 ### Build Backend
 
