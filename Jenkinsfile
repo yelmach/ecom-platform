@@ -107,12 +107,12 @@ test -f sonar-project.properties || {
 
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
+  --volumes-from "$(hostname)" \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
-  -v "$PWD:/usr/src" \
-  -w /usr/src \
+  -w "$PWD" \
   sonarsource/sonar-scanner-cli:latest \
-  -Dproject.settings=/usr/src/sonar-project.properties \
+  -Dproject.settings="$PWD/sonar-project.properties" \
   -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
   -Dsonar.qualitygate.wait=true \
   -Dsonar.qualitygate.timeout=300
