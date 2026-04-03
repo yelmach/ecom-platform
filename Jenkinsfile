@@ -77,6 +77,25 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    def currentBranch = sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    if (currentBranch != 'main') {
+                        echo "Skipping deploy because current branch is ${currentBranch}."
+                        return
+                    }
+
+                    echo 'Deploying application with Docker Compose...'
+                    sh 'make prod-up'
+                }
+            }
+        }
     }
 
     post {
