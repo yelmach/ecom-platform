@@ -99,12 +99,20 @@ pipeline {
                 sh '''#!/bin/bash
 set -euo pipefail
 
+test -f sonar-project.properties || {
+  echo "ERROR: sonar-project.properties not found in workspace: $PWD"
+  ls -la
+  exit 1
+}
+
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
   -v "$PWD:/usr/src" \
+  -w /usr/src \
   sonarsource/sonar-scanner-cli:latest \
+  -Dproject.settings=/usr/src/sonar-project.properties \
   -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
   -Dsonar.qualitygate.wait=true \
   -Dsonar.qualitygate.timeout=300
