@@ -100,6 +100,7 @@ pipeline {
 set -euo pipefail
 
 docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
   -e SONAR_TOKEN="${SONAR_TOKEN}" \
   -v "$PWD:/usr/src" \
