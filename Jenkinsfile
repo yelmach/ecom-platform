@@ -96,6 +96,28 @@ pipeline {
                 }
             }
         }
+
+        stage('Health Check') {
+            steps {
+                script {
+                    def currentBranch = sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    if (currentBranch != 'main') {
+                        echo "Skipping health check because current branch is ${currentBranch}."
+                        return
+                    }
+
+                    echo 'Checking gateway health endpoint...'
+                    sh 'curl -kfsS https://localhost:8443/actuator/health | grep -q "\"status\":\"UP\""'
+
+                    echo 'Checking frontend availability...'
+                    sh 'curl -kfsS https://localhost:4200 > /dev/null'
+                }
+            }
+        }
     }
 
     post {
