@@ -24,6 +24,10 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    triggers {
+        githubPush()
+    }
+
     tools {
         nodejs 'nodejs'
     }
