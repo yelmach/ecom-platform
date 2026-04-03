@@ -1,10 +1,18 @@
+def backendServices = [
+    'discovery-service',
+    'gateway-service',
+    'user-service',
+    'product-service',
+    'media-service'
+]
+
 pipeline {
     agent any
 
     parameters {
         string(
             name: 'EMAIL_RECIPIENTS',
-            defaultValue: 'beytour.safae@gmail.com,beyour.safae@gmail.com',
+            defaultValue: '',
             description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
         )
     }
@@ -12,6 +20,8 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     tools {
@@ -20,7 +30,6 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'
     }
 
     stages {
@@ -30,30 +39,13 @@ pipeline {
             }
         }
 
-        stage('Build Backend') {
+        stage('Verify Backend') {
             steps {
                 script {
-                    def services = env.BACKEND_SERVICES.tokenize(' ')
-
-                    services.each { service ->
+                    backendServices.each { service ->
                         echo "Building ${service}..."
                         dir("backend/${service}") {
-                            sh './mvnw -B -ntp clean package -DskipTests'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Test Backend') {
-            steps {
-                script {
-                    def services = env.BACKEND_SERVICES.tokenize(' ')
-
-                    services.each { service ->
-                        echo "Running tests for ${service}..."
-                        dir("backend/${service}") {
-                            sh './mvnw -B -ntp test'
+                            sh './mvnw -B -ntp clean verify'
                         }
                     }
                 }
@@ -71,7 +63,8 @@ pipeline {
         stage('Test Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage'
+                    echo 'Running Angular unit tests...'
+                    sh 'npm run test:ci'
                 }
             }
         }
@@ -88,7 +81,7 @@ pipeline {
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml'
+            junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml,frontend/reports/junit/*.xml'
             archiveArtifacts allowEmptyArchive: true, artifacts: 'frontend/coverage/**'
             echo 'Pipeline execution complete.'
         }
