@@ -30,12 +30,26 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
+        DEPLOY_BRANCH = 'main'
+        LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
+        DEPLOY_ATTEMPTED = 'false'
+        ROLLBACK_TRIGGERED = 'false'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 checkout scm
+                script {
+                    env.CURRENT_BRANCH = sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.CURRENT_COMMIT = sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
             }
         }
 
@@ -81,17 +95,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    def currentBranch = sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
-
-                    if (currentBranch != 'main') {
-                        echo "Skipping deploy because current branch is ${currentBranch}."
+                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
+                        echo "Skipping deploy because current branch is ${env.CURRENT_BRANCH}."
                         return
                     }
 
                     echo 'Deploying application with Docker Compose...'
+                    env.DEPLOY_ATTEMPTED = 'true'
                     sh 'make prod-up'
                 }
             }
@@ -100,13 +110,8 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    def currentBranch = sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
-
-                    if (currentBranch != 'main') {
-                        echo "Skipping health check because current branch is ${currentBranch}."
+                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
+                        echo "Skipping health check because current branch is ${env.CURRENT_BRANCH}."
                         return
                     }
 
@@ -115,6 +120,9 @@ pipeline {
 
                     echo 'Checking frontend availability...'
                     sh 'curl -kfsS https://localhost:4200 > /dev/null'
+
+                    echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
+                    writeFile file: env.LAST_SUCCESSFUL_DEPLOY_FILE, text: "${env.CURRENT_COMMIT}\n"
                 }
             }
         }
@@ -141,8 +149,8 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 """
                 )
             }
@@ -150,6 +158,21 @@ Commit: ${env.GIT_COMMIT ?: 'N/A'}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
+                if (env.DEPLOY_ATTEMPTED == 'true' && env.CURRENT_BRANCH == env.DEPLOY_BRANCH && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
+                    def previousCommit = readFile(env.LAST_SUCCESSFUL_DEPLOY_FILE).trim()
+
+                    if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
+                        echo "Rolling back to previous successful commit ${previousCommit}..."
+                        env.ROLLBACK_TRIGGERED = 'true'
+                        sh "git checkout ${previousCommit}"
+                        sh 'make prod-up'
+                    } else {
+                        echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                    }
+                } else {
+                    echo 'Skipping rollback because deployment was not attempted or no successful deploy snapshot exists yet.'
+                }
+
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
                     echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
                     return
@@ -162,8 +185,9 @@ Commit: ${env.GIT_COMMIT ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Rollback triggered: ${env.ROLLBACK_TRIGGERED}
 """
                 )
             }
