@@ -14,10 +14,6 @@ pipeline {
         disableConcurrentBuilds()
     }
 
-    tools {
-        nodejs 'nodejs'
-    }
-
     environment {
         CHROME_BIN = '/usr/bin/chromium'
         BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'
@@ -129,45 +125,11 @@ docker run --rm \
         }
         success {
             echo 'Build and tests succeeded.'
-            script {
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
-                    return
-                }
-
-                mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
-                    subject: "[Jenkins] SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """Pipeline succeeded.
-
-Job: ${env.JOB_NAME}
-Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
-"""
-                )
-            }
+            echo 'Email notification skipped (SMTP not configured).'
         }
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
-            script {
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
-                    return
-                }
-
-                mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
-                    subject: "[Jenkins] FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """Pipeline failed.
-
-Job: ${env.JOB_NAME}
-Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
-"""
-                )
-            }
+            echo 'Email notification skipped (SMTP not configured).'
         }
     }
 }
