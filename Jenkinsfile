@@ -34,7 +34,7 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        DEPLOY_BRANCH = 'main'
+        DEPLOY_BRANCH = 'test-pipeline'
         LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
         DEPLOY_ATTEMPTED = 'false'
         ROLLBACK_TRIGGERED = 'false'
