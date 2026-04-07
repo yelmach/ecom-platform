@@ -45,20 +45,18 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    def detectedBranch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
+                    env.CURRENT_BRANCH = (env.GIT_BRANCH ?: '').replaceFirst(/^origin\//, '')
 
-                    env.CURRENT_BRANCH = detectedBranch
-                        .replaceFirst(/^origin\//, '')
-                        .replaceFirst(/^\*\//, '')
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
 
                     echo "Detected branch: ${env.CURRENT_BRANCH}"
+                    echo "BRANCH_NAME      = ${env.BRANCH_NAME}"
+                    echo "CHANGE_BRANCH    = ${env.CHANGE_BRANCH}"
+                    echo "GIT_BRANCH       = ${env.GIT_BRANCH}"
+                    echo "GIT_LOCAL_BRANCH = ${env.GIT_LOCAL_BRANCH}"
                     echo "Detected commit: ${env.CURRENT_COMMIT}"
                 }
             }
