@@ -173,3 +173,5 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 - Canonical compose files are at repo root: `docker-compose.yml` and `docker-compose.dev.yml`.
 - `backend/docker-compose.yml` is kept for compatibility with existing commands.
 - Frontend Docker runtime uses Nginx with TLS certs from `backend/certs` and proxies API routes to `gateway-service`.
+
+
