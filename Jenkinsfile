@@ -144,13 +144,13 @@ pipeline {
                     sh '''
                         set -e
 
-                        for attempt in $(seq 1 12); do
+                        for attempt in $(seq 1 6); do
                           if curl -kfsS https://host.docker.internal:8443/actuator/health | grep -q '"status":"UP"'; then
                             echo "Gateway is healthy on attempt ${attempt}."
                             exit 0
                           fi
 
-                          echo "Gateway not ready yet (attempt ${attempt}/12). Waiting 5 seconds..."
+                          echo "Gateway not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
                           sleep 5
                         done
 
@@ -162,13 +162,13 @@ pipeline {
                     sh '''
                         set -e
 
-                        for attempt in $(seq 1 12); do
+                        for attempt in $(seq 1 6); do
                           if curl -kfsS https://host.docker.internal:4200 > /dev/null; then
                             echo "Frontend is reachable on attempt ${attempt}."
                             exit 0
                           fi
 
-                          echo "Frontend not ready yet (attempt ${attempt}/12). Waiting 5 seconds..."
+                          echo "Frontend not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
                           sleep 5
                         done
 
