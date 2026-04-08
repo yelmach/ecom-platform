@@ -39,7 +39,8 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
+        DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
+        LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
         DEPLOY_ATTEMPTED = 'false'
         ROLLBACK_TRIGGERED = 'false'
     }
@@ -108,7 +109,24 @@ pipeline {
 
                     echo 'Deploying application with Docker Compose...'
                     env.DEPLOY_ATTEMPTED = 'true'
-                    sh 'docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d'
+                    sh """
+                        set -e
+
+                        mkdir -p "${DEPLOY_DIR}"
+
+                        rsync -a --delete \
+                          --exclude '.git/' \
+                          --exclude 'backend/docker.env' \
+                          --exclude 'backend/certs/' \
+                          --exclude 'backend/keys/' \
+                          --exclude 'frontend/node_modules/' \
+                          --exclude 'frontend/coverage/' \
+                          --exclude 'frontend/reports/' \
+                          ./ "${DEPLOY_DIR}/"
+
+                        cd "${DEPLOY_DIR}"
+                        docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+                    """
                 }
             }
         }
@@ -128,7 +146,7 @@ pipeline {
                     sh 'curl -kfsS https://localhost:4200 > /dev/null'
 
                     echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
-                    writeFile file: env.LAST_SUCCESSFUL_DEPLOY_FILE, text: "${env.CURRENT_COMMIT}\n"
+                    sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
                 }
             }
         }
@@ -171,7 +189,24 @@ Deploy enabled: ${params.ENABLE_DEPLOY}
                         echo "Rolling back to previous successful commit ${previousCommit}..."
                         env.ROLLBACK_TRIGGERED = 'true'
                         sh "git checkout ${previousCommit}"
-                        sh 'docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d'
+                        sh """
+                            set -e
+
+                            mkdir -p "${DEPLOY_DIR}"
+
+                            rsync -a --delete \
+                              --exclude '.git/' \
+                              --exclude 'backend/docker.env' \
+                              --exclude 'backend/certs/' \
+                              --exclude 'backend/keys/' \
+                              --exclude 'frontend/node_modules/' \
+                              --exclude 'frontend/coverage/' \
+                              --exclude 'frontend/reports/' \
+                              ./ "${DEPLOY_DIR}/"
+
+                            cd "${DEPLOY_DIR}"
+                            docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+                        """
                     } else {
                         echo 'Skipping rollback because there is no different previously successful deployed commit.'
                     }
