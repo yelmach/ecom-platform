@@ -5,6 +5,8 @@ def backendServices = [
     'product-service',
     'media-service'
 ]
+def deployAttempted = false
+def rollbackTriggered = false
 
 pipeline {
     agent any
@@ -41,8 +43,6 @@ pipeline {
         CHROME_BIN = '/usr/bin/chromium'
         DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
         LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
-        DEPLOY_ATTEMPTED = 'false'
-        ROLLBACK_TRIGGERED = 'false'
     }
 
     stages {
@@ -108,7 +108,7 @@ pipeline {
                     }
 
                     echo 'Deploying application with Docker Compose...'
-                    env.DEPLOY_ATTEMPTED = 'true'
+                    deployAttempted = true
                     sh """
                         set -e
 
@@ -213,7 +213,7 @@ Deploy enabled: ${params.ENABLE_DEPLOY}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
-                if (env.DEPLOY_ATTEMPTED == 'true') {
+                if (deployAttempted) {
                     def rollbackFileExists = sh(
                         script: "[ -f '${env.LAST_SUCCESSFUL_DEPLOY_FILE}' ]",
                         returnStatus: true
@@ -227,7 +227,7 @@ Deploy enabled: ${params.ENABLE_DEPLOY}
 
                         if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
                             echo "Rolling back to previous successful commit ${previousCommit}..."
-                            env.ROLLBACK_TRIGGERED = 'true'
+                            rollbackTriggered = true
                             sh "git checkout ${previousCommit}"
                             sh """
                                 set -e
@@ -272,7 +272,7 @@ Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Deploy enabled: ${params.ENABLE_DEPLOY}
-Rollback triggered: ${env.ROLLBACK_TRIGGERED}
+Rollback triggered: ${rollbackTriggered}
 """
                 )
             }
