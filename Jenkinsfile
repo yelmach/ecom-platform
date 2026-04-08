@@ -144,7 +144,7 @@ pipeline {
                         set -e
 
                         for attempt in $(seq 1 12); do
-                          if curl -kfsS https://localhost:8443/actuator/health | grep -q '"status":"UP"'; then
+                          if curl -kfsS https://host.docker.internal:8443/actuator/health | grep -q '"status":"UP"'; then
                             echo "Gateway is healthy on attempt ${attempt}."
                             exit 0
                           fi
@@ -162,7 +162,7 @@ pipeline {
                         set -e
 
                         for attempt in $(seq 1 12); do
-                          if curl -kfsS https://localhost:4200 > /dev/null; then
+                          if curl -kfsS https://host.docker.internal:4200 > /dev/null; then
                             echo "Frontend is reachable on attempt ${attempt}."
                             exit 0
                           fi
