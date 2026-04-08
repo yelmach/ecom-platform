@@ -139,11 +139,41 @@ pipeline {
                         return
                     }
 
-                    echo 'Checking gateway health endpoint...'
-                    sh 'curl -kfsS https://localhost:8443/actuator/health | grep -q "\"status\":\"UP\""'
+                    echo 'Waiting for gateway health endpoint to become ready...'
+                    sh '''
+                        set -e
 
-                    echo 'Checking frontend availability...'
-                    sh 'curl -kfsS https://localhost:4200 > /dev/null'
+                        for attempt in $(seq 1 12); do
+                          if curl -kfsS https://localhost:8443/actuator/health | grep -q '"status":"UP"'; then
+                            echo "Gateway is healthy on attempt ${attempt}."
+                            exit 0
+                          fi
+
+                          echo "Gateway not ready yet (attempt ${attempt}/12). Waiting 5 seconds..."
+                          sleep 5
+                        done
+
+                        echo 'Gateway health check did not succeed in time.'
+                        exit 1
+                    '''
+
+                    echo 'Waiting for frontend to become reachable...'
+                    sh '''
+                        set -e
+
+                        for attempt in $(seq 1 12); do
+                          if curl -kfsS https://localhost:4200 > /dev/null; then
+                            echo "Frontend is reachable on attempt ${attempt}."
+                            exit 0
+                          fi
+
+                          echo "Frontend not ready yet (attempt ${attempt}/12). Waiting 5 seconds..."
+                          sleep 5
+                        done
+
+                        echo 'Frontend health check did not succeed in time.'
+                        exit 1
+                    '''
 
                     echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
                     sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
