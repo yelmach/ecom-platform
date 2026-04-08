@@ -1,10 +1,18 @@
+def backendServices = [
+    'discovery-service',
+    'gateway-service',
+    'user-service',
+    'product-service',
+    'media-service'
+]
+
 pipeline {
     agent any
 
     parameters {
         string(
             name: 'EMAIL_RECIPIENTS',
-            defaultValue: 'beytour.safae@gmail.com,beyour.safae@gmail.com',
+            defaultValue: '',
             description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
         )
     }
@@ -12,6 +20,12 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    triggers {
+        githubPush()
     }
 
     tools {
@@ -20,7 +34,10 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'
+        DEPLOY_BRANCH = 'main'
+        LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
+        DEPLOY_ATTEMPTED = 'false'
+        ROLLBACK_TRIGGERED = 'false'
         SONAR_PROJECT_KEY = 'ecom-platform'
         SONAR_HOST_URL = 'http://host.docker.internal:9000'
         SONAR_TOKEN = credentials('sonar-token-ecom')
@@ -30,33 +47,26 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 checkout scm
-            }
-        }
-
-        stage('Build Backend') {
-            steps {
                 script {
-                    def services = env.BACKEND_SERVICES.tokenize(' ')
-
-                    services.each { service ->
-                        echo "Building ${service}..."
-                        dir("backend/${service}") {
-                            sh './mvnw -B -ntp clean package -DskipTests'
-                        }
-                    }
+                    env.CURRENT_BRANCH = sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.CURRENT_COMMIT = sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
                 }
             }
         }
 
-        stage('Test Backend') {
+        stage('Verify Backend') {
             steps {
                 script {
-                    def services = env.BACKEND_SERVICES.tokenize(' ')
-
-                    services.each { service ->
-                        echo "Running tests for ${service}..."
+                    backendServices.each { service ->
+                        echo "Building ${service}..."
                         dir("backend/${service}") {
-                            sh './mvnw -B -ntp test'
+                            sh './mvnw -B -ntp clean verify'
                         }
                     }
                 }
@@ -74,7 +84,8 @@ pipeline {
         stage('Test Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage'
+                    echo 'Running Angular unit tests...'
+                    sh 'npm run test:ci'
                 }
             }
         }
@@ -84,6 +95,41 @@ pipeline {
                 dir('frontend') {
                     echo 'Building Angular app...'
                     sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
+                        echo "Skipping deploy because current branch is ${env.CURRENT_BRANCH}."
+                        return
+                    }
+
+                    echo 'Deploying application with Docker Compose...'
+                    env.DEPLOY_ATTEMPTED = 'true'
+                    sh 'make prod-up'
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                script {
+                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
+                        echo "Skipping health check because current branch is ${env.CURRENT_BRANCH}."
+                        return
+                    }
+
+                    echo 'Checking gateway health endpoint...'
+                    sh 'curl -kfsS https://localhost:8443/actuator/health | grep -q "\"status\":\"UP\""'
+
+                    echo 'Checking frontend availability...'
+                    sh 'curl -kfsS https://localhost:4200 > /dev/null'
+
+                    echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
+                    writeFile file: env.LAST_SUCCESSFUL_DEPLOY_FILE, text: "${env.CURRENT_COMMIT}\n"
                 }
             }
         }
@@ -123,7 +169,7 @@ docker run --rm \
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml'
+            junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml,frontend/reports/junit/*.xml'
             archiveArtifacts allowEmptyArchive: true, artifacts: 'frontend/coverage/**'
             echo 'Pipeline execution complete.'
         }
@@ -142,8 +188,8 @@ docker run --rm \
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 """
                 )
             }
@@ -151,6 +197,21 @@ Commit: ${env.GIT_COMMIT ?: 'N/A'}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
+                if (env.DEPLOY_ATTEMPTED == 'true' && env.CURRENT_BRANCH == env.DEPLOY_BRANCH && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
+                    def previousCommit = readFile(env.LAST_SUCCESSFUL_DEPLOY_FILE).trim()
+
+                    if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
+                        echo "Rolling back to previous successful commit ${previousCommit}..."
+                        env.ROLLBACK_TRIGGERED = 'true'
+                        sh "git checkout ${previousCommit}"
+                        sh 'make prod-up'
+                    } else {
+                        echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                    }
+                } else {
+                    echo 'Skipping rollback because deployment was not attempted or no successful deploy snapshot exists yet.'
+                }
+
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
                     echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
                     return
@@ -163,8 +224,9 @@ Commit: ${env.GIT_COMMIT ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'N/A'}
-Commit: ${env.GIT_COMMIT ?: 'N/A'}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Rollback triggered: ${env.ROLLBACK_TRIGGERED}
 """
                 )
             }
