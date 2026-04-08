@@ -116,6 +116,7 @@ pipeline {
 
                         rsync -a --delete \
                           --exclude '.git/' \
+                          --exclude '.jenkins-last-successful-deploy' \
                           --exclude 'backend/docker.env' \
                           --exclude 'backend/certs/' \
                           --exclude 'backend/keys/' \
@@ -212,36 +213,49 @@ Deploy enabled: ${params.ENABLE_DEPLOY}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
-                if (env.DEPLOY_ATTEMPTED == 'true' && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
-                    def previousCommit = readFile(env.LAST_SUCCESSFUL_DEPLOY_FILE).trim()
+                if (env.DEPLOY_ATTEMPTED == 'true') {
+                    def rollbackFileExists = sh(
+                        script: "[ -f '${env.LAST_SUCCESSFUL_DEPLOY_FILE}' ]",
+                        returnStatus: true
+                    ) == 0
 
-                    if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
-                        echo "Rolling back to previous successful commit ${previousCommit}..."
-                        env.ROLLBACK_TRIGGERED = 'true'
-                        sh "git checkout ${previousCommit}"
-                        sh """
-                            set -e
+                    if (rollbackFileExists) {
+                        def previousCommit = sh(
+                            script: "cat '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'",
+                            returnStdout: true
+                        ).trim()
 
-                            mkdir -p "${DEPLOY_DIR}"
+                        if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
+                            echo "Rolling back to previous successful commit ${previousCommit}..."
+                            env.ROLLBACK_TRIGGERED = 'true'
+                            sh "git checkout ${previousCommit}"
+                            sh """
+                                set -e
 
-                            rsync -a --delete \
-                              --exclude '.git/' \
-                              --exclude 'backend/docker.env' \
-                              --exclude 'backend/certs/' \
-                              --exclude 'backend/keys/' \
-                              --exclude 'frontend/node_modules/' \
-                              --exclude 'frontend/coverage/' \
-                              --exclude 'frontend/reports/' \
-                              ./ "${DEPLOY_DIR}/"
+                                mkdir -p "${DEPLOY_DIR}"
 
-                            cd "${DEPLOY_DIR}"
-                            docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
-                        """
+                                rsync -a --delete \
+                                  --exclude '.git/' \
+                                  --exclude '.jenkins-last-successful-deploy' \
+                                  --exclude 'backend/docker.env' \
+                                  --exclude 'backend/certs/' \
+                                  --exclude 'backend/keys/' \
+                                  --exclude 'frontend/node_modules/' \
+                                  --exclude 'frontend/coverage/' \
+                                  --exclude 'frontend/reports/' \
+                                  ./ "${DEPLOY_DIR}/"
+
+                                cd "${DEPLOY_DIR}"
+                                docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+                            """
+                        } else {
+                            echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                        }
                     } else {
-                        echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_DEPLOY_FILE} does not exist."
                     }
                 } else {
-                    echo 'Skipping rollback because deployment was not attempted or no successful deploy snapshot exists yet.'
+                    echo 'Skipping rollback because deployment was not attempted.'
                 }
 
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
