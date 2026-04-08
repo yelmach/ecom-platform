@@ -10,6 +10,11 @@ pipeline {
     agent any
 
     parameters {
+        booleanParam(
+            name: 'ENABLE_DEPLOY',
+            defaultValue: true,
+            description: 'Run deployment and post-deploy health checks after a successful build'
+        )
         string(
             name: 'EMAIL_RECIPIENTS',
             defaultValue: '',
@@ -34,7 +39,6 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        DEPLOY_BRANCH = 'test-pipeline'
         LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
         DEPLOY_ATTEMPTED = 'false'
         ROLLBACK_TRIGGERED = 'false'
@@ -45,18 +49,11 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    env.CURRENT_BRANCH = (env.GIT_BRANCH ?: '').replaceFirst(/^origin\//, '')
-
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
 
-                    echo "Detected branch: ${env.CURRENT_BRANCH}"
-                    echo "BRANCH_NAME      = ${env.BRANCH_NAME}"
-                    echo "CHANGE_BRANCH    = ${env.CHANGE_BRANCH}"
-                    echo "GIT_BRANCH       = ${env.GIT_BRANCH}"
-                    echo "GIT_LOCAL_BRANCH = ${env.GIT_LOCAL_BRANCH}"
                     echo "Detected commit: ${env.CURRENT_COMMIT}"
                 }
             }
@@ -104,14 +101,14 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
-                        echo "Skipping deploy because current branch is ${env.CURRENT_BRANCH}."
+                    if (!params.ENABLE_DEPLOY) {
+                        echo 'Skipping deploy because ENABLE_DEPLOY is false.'
                         return
                     }
 
                     echo 'Deploying application with Docker Compose...'
                     env.DEPLOY_ATTEMPTED = 'true'
-                    sh 'make prod-up'
+                    sh 'docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d'
                 }
             }
         }
@@ -119,8 +116,8 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
-                        echo "Skipping health check because current branch is ${env.CURRENT_BRANCH}."
+                    if (!params.ENABLE_DEPLOY) {
+                        echo 'Skipping health check because ENABLE_DEPLOY is false.'
                         return
                     }
 
@@ -158,8 +155,8 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Deploy enabled: ${params.ENABLE_DEPLOY}
 """
                 )
             }
@@ -167,14 +164,14 @@ Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
-                if (env.DEPLOY_ATTEMPTED == 'true' && env.CURRENT_BRANCH == env.DEPLOY_BRANCH && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
+                if (env.DEPLOY_ATTEMPTED == 'true' && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
                     def previousCommit = readFile(env.LAST_SUCCESSFUL_DEPLOY_FILE).trim()
 
                     if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
                         echo "Rolling back to previous successful commit ${previousCommit}..."
                         env.ROLLBACK_TRIGGERED = 'true'
                         sh "git checkout ${previousCommit}"
-                        sh 'make prod-up'
+                        sh 'docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d'
                     } else {
                         echo 'Skipping rollback because there is no different previously successful deployed commit.'
                     }
@@ -194,8 +191,8 @@ Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Deploy enabled: ${params.ENABLE_DEPLOY}
 Rollback triggered: ${env.ROLLBACK_TRIGGERED}
 """
                 )
