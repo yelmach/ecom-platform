@@ -67,6 +67,7 @@ pipeline {
                         echo "Building ${service}..."
                         dir("backend/${service}") {
                             sh './mvnw -B -ntp clean verify'
+                            sh './mvnw -B -ntp dependency:copy-dependencies -DincludeScope=compile -DoutputDirectory=target/dependency'
                         }
                     }
                 }
