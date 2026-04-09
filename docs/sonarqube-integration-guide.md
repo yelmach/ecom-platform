@@ -140,3 +140,5 @@ GitHub branch protection should be configured to require these checks on target 
 
 This setup triggers scans on every push and pull request.
 Advanced branch/PR decoration capabilities in SonarQube depend on the SonarQube edition and ALM binding configuration.
+
+
