@@ -99,6 +99,38 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    if (!env.SONAR_HOST_URL?.trim() || !env.SONAR_TOKEN?.trim()) {
+                        error('SONAR_HOST_URL and SONAR_TOKEN must be configured in Jenkins environment/credentials.')
+                    }
+                }
+
+                sh '''#!/bin/bash
+set -euo pipefail
+
+test -f sonar-project.properties || {
+  echo "ERROR: sonar-project.properties not found in workspace: $PWD"
+  ls -la
+  exit 1
+}
+
+docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
+  --volumes-from "$(hostname)" \
+  -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+  -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -w "$PWD" \
+  sonarsource/sonar-scanner-cli:latest \
+  -Dproject.settings="$PWD/sonar-project.properties" \
+  -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
+  -Dsonar.qualitygate.wait=true \
+  -Dsonar.qualitygate.timeout=300
+'''
+            }
+        }
+
         stage('Deploy') {
             steps {
                 script {
@@ -131,38 +163,6 @@ pipeline {
                     echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
                     writeFile file: env.LAST_SUCCESSFUL_DEPLOY_FILE, text: "${env.CURRENT_COMMIT}\n"
                 }
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    if (!env.SONAR_HOST_URL?.trim() || !env.SONAR_TOKEN?.trim()) {
-                        error('SONAR_HOST_URL and SONAR_TOKEN must be configured in Jenkins environment/credentials.')
-                    }
-                }
-
-                sh '''#!/bin/bash
-set -euo pipefail
-
-test -f sonar-project.properties || {
-  echo "ERROR: sonar-project.properties not found in workspace: $PWD"
-  ls -la
-  exit 1
-}
-
-docker run --rm \
-  --add-host=host.docker.internal:host-gateway \
-  --volumes-from "$(hostname)" \
-  -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-  -e SONAR_TOKEN="${SONAR_TOKEN}" \
-  -w "$PWD" \
-  sonarsource/sonar-scanner-cli:latest \
-  -Dproject.settings="$PWD/sonar-project.properties" \
-  -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
-  -Dsonar.qualitygate.wait=true \
-  -Dsonar.qualitygate.timeout=300
-'''
             }
         }
     }
