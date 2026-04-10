@@ -1,102 +1,86 @@
-# Jenkins CI Guide
+# Jenkins CI/CD Guide
 
-## 1) What Jenkins Is
+## 1) What Jenkins Does In This Project
 
-Jenkins is an automation server.
+Jenkins is the automation server for `MR-Jenk`.
 
-In this project, Jenkins does these tasks automatically:
+In this project, Jenkins does this flow:
 
-1. Fetch source code from GitHub
-2. Build backend services
-3. Run backend unit tests
-4. Install frontend dependencies
-5. Run frontend unit tests
-6. Build frontend app
-7. Publish test/coverage outputs in Jenkins
+1. Fetch the latest code from GitHub
+2. Run backend unit tests
+3. Run frontend unit tests
+4. Build the frontend
+5. Deploy the tested code the OCI VM
+6. Run post-deploy health checks
+7. Roll back to the previous successful commit if deployment health checks fail
+8. Publish test results and send notifications
 
-This is Continuous Integration (CI): every code change is validated quickly and consistently.
+## 2) Jenkins Container Setup
 
-## 2) Concepts You Should Know
+### Why Jenkins Runs In Docker
 
-- `Pipeline`: the sequence of stages Jenkins executes
-- `Stage`: a logical step like Build, Test, Deploy
-- `Agent`: machine/container where Jenkins runs commands
-- `SCM`: Source Control Management (GitHub here)
-- `Jenkinsfile`: pipeline-as-code file stored in the repository
-- `Post actions`: always/success/failure actions after stages
+This project runs Jenkins in Docker so setup is reproducible and easy to move to the OCI VM.
 
-## 3) Project Jenkins Setup
+The Jenkins container has:
 
-Jenkins runtime files:
+- Docker CLI + Docker Compose plugin
+- Chromium for Angular/Karma tests
+- `rsync` for copying tested code into the deploy directory
+- Docker socket access so Jenkins can build and run the application stack
 
-- [jenkins/docker-compose.yml](../jenkins/docker-compose.yml)
-- [jenkins/Dockerfile](../jenkins/Dockerfile)
+### Current Jenkins Container Design
 
-Pipeline definition:
+From [jenkins/docker-compose.yml](../jenkins/docker-compose.yml):
 
-- [Jenkinsfile](../Jenkinsfile)
+- Jenkins runs as `root`
+- Docker socket is mounted:
+  - `/var/run/docker.sock:/var/run/docker.sock`
+- Stable deploy directory is mounted:
+  - `/home/opc/ecom-platform-deploy:/home/opc/ecom-platform-deploy`
+- Host access alias is configured:
+  - `host.docker.internal:host-gateway`
 
-### Important note about this repo
+That last part is important because health checks run **inside the Jenkins container**, but the deployed app is exposed on the **VM host ports**.
 
-Jenkins container is configured with `user: root` in `jenkins/docker-compose.yml`.
+## 3) Start Jenkins
 
-Because of that, frontend browser tests must run with a no-sandbox browser launcher in CI.
-
-## 4) Start Jenkins
-
-From repo root:
+From `/home/opc/ecom-platform` on the VM:
 
 ```bash
-cd jenkins
-docker compose up -d --build
-docker compose ps
+docker compose -f jenkins/docker-compose.yml up -d --build
+docker compose -f jenkins/docker-compose.yml ps
 ```
 
-Command explanation:
+Open Jenkins:
 
-- `cd jenkins`:
-  - move into the folder that contains Jenkins Docker files.
-- `docker compose up -d --build`:
-  - build Jenkins image (if needed) and start container in background.
-  - `-d` means detached mode (terminal stays free).
-  - `--build` forces image rebuild so Dockerfile changes are applied.
-- `docker compose ps`:
-  - show running containers and status/ports.
+```text
+http://<VM_PUBLIC_IP>:8080
+```
 
-Open Jenkins UI:
-
-`http://localhost:8080`
-
-If Jenkins is fresh, unlock it:
+If Jenkins is fresh, get the initial password:
 
 ```bash
 docker exec -it jenkins-server cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
-Command explanation:
+Then:
 
-- `docker exec`:
-  - run a command inside a running container.
-- `-it`:
-  - interactive terminal mode.
-- `jenkins-server`:
-  - container name from `jenkins/docker-compose.yml`.
-- `cat /var/jenkins_home/secrets/initialAdminPassword`:
-  - print first-time Jenkins unlock password.
+1. Unlock Jenkins
+2. Install plugins
+3. Create admin user
 
-Then install suggested plugins and create your admin user.
-
-## 5) Required Jenkins Plugins and Tools
+## 4) Required Jenkins Plugins And Tools
 
 ### Plugins
 
 - Pipeline
 - Git
+- GitHub
 - NodeJS
 - JUnit
 - Mailer
 
-### Global Tool configuration
+### Global Tool Configuration
 
 Go to:
 
@@ -106,266 +90,301 @@ Add NodeJS installation named exactly:
 
 `nodejs`
 
-Why this name matters:
-the `Jenkinsfile` references `tools { nodejs 'nodejs' }`.
+Why:
 
-## 6) Create the Pipeline Job
+[Jenkinsfile](../Jenkinsfile) uses:
+
+```groovy
+tools {
+    nodejs 'nodejs'
+}
+```
+
+## 5) Stable Deployment Directory
+
+This pipeline does **not** deploy from the Jenkins workspace.
+
+Instead, it deploys from a fixed VM directory:
+
+```text
+/home/opc/ecom-platform-deploy
+```
+
+Why:
+
+- Jenkins workspace is temporary
+- deploy directory is stable
+- secrets stay outside Git
+- rollback can redeploy a previously successful commit
+
+### Required Deploy Directory Content
+
+Before Jenkins deployment works, this directory must already contain the runtime-only files:
+
+```text
+/home/opc/ecom-platform-deploy/backend/docker.env
+/home/opc/ecom-platform-deploy/backend/certs/
+/home/opc/ecom-platform-deploy/backend/keys/
+```
+
+These files are **not** copied from Git by Jenkins. They are preserved in the deploy directory.
+
+## 6) Create The Jenkins Job
 
 1. Jenkins -> `New Item`
-2. Name: `ecom-market` (or any name you prefer)
+2. Name it, for example:
+   - `ecom-platform-main`
 3. Type: `Pipeline`
-4. In job config, set:
+4. Configure:
    - Definition: `Pipeline script from SCM`
    - SCM: `Git`
    - Repository URL: your repo URL
-   - Branch Specifier: your branch (example: `*/main` or `*/ci_Pipeline`)
+   - Branch Specifier: the branch for this job
    - Script Path: `Jenkinsfile`
 5. Save
-6. Click `Build Now`
 
-## 7) What This Jenkinsfile Does
 
-### 7.1 Jenkinsfile Explanation
+## 7) Webhook / Automatic Trigger
 
-Reference file:
+This pipeline defines:
+
+```groovy
+triggers {
+    githubPush()
+}
+```
+
+To make that work end-to-end:
+
+1. In Jenkins job config, enable:
+   - `GitHub hook trigger for GITScm polling`
+2. In GitHub repo settings, add webhook:
+   - Payload URL:
+     `http://<VM_PUBLIC_IP>:8080/github-webhook/`
+   - Content type:
+     `application/json`
+   - Event:
+     `Just the push event`
+
+Then a push should trigger Jenkins automatically.
+
+## 8) Jenkinsfile Flow
+
+Reference:
 
 - [Jenkinsfile](../Jenkinsfile)
 
-Explanation of content:
+### Parameters
 
-- `pipeline {}`
-  - starts a declarative Jenkins pipeline block.
-- `agent any`
-  - Jenkins can run this pipeline on any available agent/executor.
-
-- `options {}`
-  - pipeline-level execution options start.
-- `timestamps()`
-  - adds timestamps to each log line for easier debugging.
-- `disableConcurrentBuilds()`
-  - prevents two runs of the same job from executing at the same time.
-
-- `tools {}`
-  - declares tools Jenkins should provide to pipeline steps.
-- `nodejs 'nodejs'`
-  - use Jenkins NodeJS tool installation named `nodejs`.
-
-- `parameters {}`
-  - defines runtime build parameters.
+- `ENABLE_DEPLOY`
+  - if `true`, run deploy + health checks
+  - if `false`, run CI only
 - `EMAIL_RECIPIENTS`
-  - comma-separated email recipients used by success/failure email notifications.
+  - comma-separated notification recipients
 
-- `environment {}`
-  - define pipeline-wide environment variables.
-- `CHROME_BIN = '/usr/bin/chromium'`
-  - sets Chromium executable path for frontend test browser launching.
-- `BACKEND_SERVICES = 'discovery-service gateway-service user-service product-service media-service'`
-  - one variable listing all backend service directories to iterate over.
+### Environment
 
-- `stages {}`
-  - starts all pipeline stages.
+- `CHROME_BIN=/usr/bin/chromium`
+  - used by frontend tests
+- `DEPLOY_DIR=/home/opc/ecom-platform-deploy`
+  - stable deployment directory
+- `LAST_SUCCESSFUL_DEPLOY_FILE=/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy`
+  - stores last known good deployed commit
 
-- `stage('Checkout Code')`
-  - `checkout scm` checks out repository code configured for the job.
-
-- `stage('Build Backend')`
-  - enters scripted block to loop over backend services.
-  - converts `BACKEND_SERVICES` string to list using `tokenize(' ')`.
-  - iterates service-by-service.
-  - changes into `backend/<service>` directory.
-  - runs Maven build command:
-    - `clean package` builds jar
-    - `-DskipTests` skips tests here (tests run in dedicated stage).
-
-- `stage('Test Backend')`
-  - same loop pattern as build stage.
-  -  runs `./mvnw -B -ntp test` for each service.
-  - if any test fails, this stage fails and pipeline stops.
-
-- `stage('Install Frontend Dependencies')`
-  - moves into `frontend` directory and runs `npm ci`.
-  - installs dependencies from lock file for reproducible CI installs.
-
-- `stage('Test Frontend')`
-  - runs Angular tests in CI mode:
-  - `--watch=false`: single-run mode.
-  - `--browsers=ChromeHeadlessNoSandbox`: browser mode compatible with root-container CI.
-  - `--code-coverage`: produces frontend coverage artifacts.
-
-- `stage('Build Frontend')`
-  - if previous stages are green, runs `npm run build`.
-  - generates production frontend build output.
-
-- `post {   }`
-  - defines actions executed after stage execution.
-- `always { ... }`
-  - always publish available backend JUnit reports.
-  - always archive frontend coverage artifacts.
-  - always print completion message.
-- `success { ... }`
-  - message shown when pipeline succeeds.
-- `failure { ... }`
-  - message shown when pipeline fails.
-
-Current pipeline stages:
+### Stages
 
 1. `Checkout Code`
-2. `Build Backend`
-3. `Test Backend`
-4. `Install Frontend Dependencies`
-5. `Test Frontend`
-6. `Build Frontend`
+   - `checkout scm`
+   - saves current Git commit SHA
 
-### Build Backend
+2. `Verify Backend`
+   - loops through backend services
+   - runs:
+     ```bash
+     ./mvnw -B -ntp clean verify
+     ```
 
-Builds these services one by one:
+3. `Install Frontend Dependencies`
+   - runs:
+     ```bash
+     npm ci
+     ```
 
-- discovery-service
-- gateway-service
-- user-service
-- product-service
-- media-service
+4. `Test Frontend`
+   - runs:
+     ```bash
+     npm run test:ci
+     ```
 
-Command pattern:
+5. `Build Frontend`
+   - runs:
+     ```bash
+     npm run build
+     ```
 
-`./mvnw -B -ntp clean package -DskipTests`
+6. `Deploy`
+   - runs only when `ENABLE_DEPLOY=true`
+   - copies the tested workspace into the stable deploy directory with `rsync`
+   - preserves:
+     - `backend/docker.env`
+     - `backend/certs/`
+     - `backend/keys/`
+     - `.jenkins-last-successful-deploy`
+   - deploys from the stable directory using:
+     ```bash
+     docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+     ```
 
-Flag explanation:
+7. `Health Check`
+   - runs only when `ENABLE_DEPLOY=true`
+   - checks:
+     - gateway health endpoint
+     - frontend availability
+   - uses retries
+   - only if health checks pass, saves current commit as the last successful deployed commit
 
-- `./mvnw`:
-  - project Maven wrapper (ensures consistent Maven runtime).
-- `-B`:
-  - batch mode, better for CI logs.
-- `-ntp`:
-  - no transfer progress, cleaner output.
-- `clean`:
-  - remove previous build artifacts from `target/`.
-- `package`:
-  - compile and package service into jar.
-- `-DskipTests`:
-  - skip test execution in build stage (tests run in separate stage).
+## 9) Why Health Checks Use `host.docker.internal`
 
-### Test Backend
+Health checks run inside the Jenkins container.
 
-Runs tests for each backend service:
+So:
 
-`./mvnw -B -ntp test`
+- `localhost` inside Jenkins means the Jenkins container itself
+- it does **not** mean the VM host
 
-Command explanation:
+Because the app is deployed on the VM host through Docker, Jenkins uses:
 
-- `test` goal runs unit tests through Maven Surefire.
-- Fails stage immediately if any test fails.
+```text
+host.docker.internal
+```
 
-### Test Frontend
+This hostname is mapped by:
 
-Runs Angular/Karma tests in CI mode:
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
 
-`npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage`
+So Jenkins can reach:
 
-Flag explanation:
+- `https://host.docker.internal:8443/actuator/health`
+- `https://host.docker.internal:4200`
 
-- `npm run test`:
-  - executes `ng test` script from `frontend/package.json`.
-- `--`:
-  - passes following flags to underlying Angular/Karma command.
-- `--watch=false`:
-  - single-run CI mode (do not wait for file changes).
-- `--browsers=ChromeHeadlessNoSandbox`:
-  - run tests in headless Chrome with no-sandbox launcher for root-container CI.
-- `--code-coverage`:
-  - generate coverage report files.
+## 10) Rollback Strategy
 
-Why `ChromeHeadlessNoSandbox`:
+Rollback is a **basic commit-based rollback**.
 
-- Jenkins container runs as root in this project setup
-- Chrome blocks root mode unless no-sandbox is used
+How it works:
 
-### Post Actions
+1. a successful deployment writes the commit SHA into:
+   - `/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy`
+2. if a later deployment fails after deployment was attempted:
+   - Jenkins reads the previous successful commit
+   - checks out that commit in the workspace
+   - syncs it back into the deploy directory with `rsync`
+   - redeploys it with Docker Compose
 
-Always executes:
+## 11) Test Reports In Jenkins
 
-- publish backend JUnit XML:
-  `backend/**/target/surefire-reports/*.xml`
-- archive frontend coverage:
-  `frontend/coverage/**`
+### Backend
 
-Also prints clear success/failure message.
+Backend Maven tests generate Surefire XML reports:
 
-## 8) How to Run and Validate CI
+```text
+backend/**/target/surefire-reports/*.xml
+```
 
-After clicking `Build Now`, verify:
+Jenkins publishes them with:
 
-1. Stages appear in order
-2. `Test Backend` runs real tests (not skipped)
-3. `Test Frontend` launches ChromeHeadlessNoSandbox
-4. Build ends with `SUCCESS` when all pass
-5. Build ends with `FAILURE` if any test fails
+```groovy
+junit ...
+```
 
-Check outputs in Jenkins build page:
+### Frontend
+
+Frontend Karma tests generate JUnit XML:
+
+```text
+frontend/reports/junit/frontend-tests.xml
+```
+
+Frontend coverage is archived from:
+
+```text
+frontend/coverage/**
+```
+
+### Where To View Results
+
+After a build:
 
 - `Console Output` for logs
-- `Test Result` for backend JUnit
+- `Test Result` for backend + frontend JUnit reports
 - `Artifacts` for frontend coverage
 
-## 8.1) Configure Email Notifications
+## 12) Notifications
 
-This pipeline supports email notifications with Jenkins job parameter:
+The pipeline sends emails on:
 
-- `EMAIL_RECIPIENTS` (comma-separated recipients)
+- success
+- failure
 
-Before it can send emails, configure SMTP in Jenkins:
+Current notifications include:
 
-1. Go to `Manage Jenkins -> System`
-2. Find `E-mail Notification`
-3. Configure:
-   - SMTP server
-   - SMTP port
-   - authentication username/password (if required)
-   - TLS/SSL settings based on your provider
-4. Save
-5. Use `Test configuration by sending test e-mail`
+- job name
+- build number
+- commit SHA
+- deploy enabled
+- deploy attempted
+- deploy succeeded
+- health check passed
+- rollback triggered
+- failing stage on failure
+- Jenkins build URL
 
-Then in your pipeline job:
+If `EMAIL_RECIPIENTS` is empty, the pipeline skips email without failing the build.
 
-1. Click `Build with Parameters`
-2. Set `EMAIL_RECIPIENTS` (example: `you@example.com,team@example.com`)
-3. Run a build
+### SMTP Setup
 
-Expected behavior:
+Go to:
 
-- On success: Jenkins sends a success email
-- On failure: Jenkins sends a failure email
-- If recipients are empty: pipeline logs a skip message and does not fail
+`Manage Jenkins -> Configure System`
 
-## 9) Common Issues and Fixes
+Configure:
 
-### A) "No changes" and no stages run
+- SMTP server
+- port
+- authentication if required
+- TLS/SSL depending on provider
 
-Usually wrong job type/entry.
+Then either:
 
-Fix:
+- set a default value for `EMAIL_RECIPIENTS` in the job configuration
+- or fill it during `Build with Parameters`
 
-- use Pipeline job
-- ensure job points to `Jenkinsfile`
-- run the actual branch job if using multibranch
+## 13) How To Validate The Pipeline
 
-### B) Frontend test error: `Running as root without --no-sandbox`
+### Happy Path
 
-Cause:
+1. Push a harmless visible change
+2. Jenkins triggers automatically
+3. Backend tests pass
+4. Frontend tests pass
+5. Deploy runs
+6. Health check passes
+7. App is reachable in browser
 
-- container runs as root
+### CI Failure
 
-Fix:
+1. Break one backend test or frontend test
+2. Push the change
+3. Confirm pipeline fails before deployment
 
-- use `--browsers=ChromeHeadlessNoSandbox` in CI command
+### Rollback
 
-### C) Frontend test error: `describe is not defined`
-
-Cause:
-
-- custom Karma config replaced Angular defaults and removed Jasmine setup
-
-Fix:
-
-- keep Angular default test builder config
-- do not override Karma config unless you include full frameworks/plugins
+1. Start from one successful deployment
+2. Push a change that breaks runtime health but still passes tests
+3. Confirm:
+   - deploy runs
+   - health check fails
+   - rollback runs
