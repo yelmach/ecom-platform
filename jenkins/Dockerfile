@@ -2,7 +2,7 @@ FROM jenkins/jenkins:lts
 USER root
 
 # Install dependencies to add the Docker repository
-RUN apt-get update && apt-get install -y lsb-release curl ca-certificates chromium
+RUN apt-get update && apt-get install -y lsb-release curl ca-certificates chromium rsync
 
 # Add Docker's official GPG key and repository
 RUN curl -fsSLo /usr/share/keyrings/docker-archive-keyring.asc https://download.docker.com/linux/debian/gpg

@@ -5,11 +5,21 @@ def backendServices = [
     'product-service',
     'media-service'
 ]
+def deployAttempted = false
+def deploySucceeded = false
+def healthCheckPassed = false
+def rollbackTriggered = false
+def currentStageName = 'Not started'
 
 pipeline {
     agent any
 
     parameters {
+        booleanParam(
+            name: 'ENABLE_DEPLOY',
+            defaultValue: true,
+            description: 'Run deployment and post-deploy health checks after a successful build'
+        )
         string(
             name: 'EMAIL_RECIPIENTS',
             defaultValue: '',
@@ -34,10 +44,8 @@ pipeline {
 
     environment {
         CHROME_BIN = '/usr/bin/chromium'
-        DEPLOY_BRANCH = 'main'
-        LAST_SUCCESSFUL_DEPLOY_FILE = '.jenkins-last-successful-deploy'
-        DEPLOY_ATTEMPTED = 'false'
-        ROLLBACK_TRIGGERED = 'false'
+        DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
+        LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
     }
 
     stages {
@@ -45,14 +53,13 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    env.CURRENT_BRANCH = sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
+                    currentStageName = 'Checkout Code'
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
+
+                    echo "Detected commit: ${env.CURRENT_COMMIT}"
                 }
             }
         }
@@ -60,6 +67,7 @@ pipeline {
         stage('Verify Backend') {
             steps {
                 script {
+                    currentStageName = 'Verify Backend'
                     backendServices.each { service ->
                         echo "Building ${service}..."
                         dir("backend/${service}") {
@@ -72,6 +80,9 @@ pipeline {
 
         stage('Install Frontend Dependencies') {
             steps {
+                script {
+                    currentStageName = 'Install Frontend Dependencies'
+                }
                 dir('frontend') {
                     sh 'npm ci'
                 }
@@ -80,6 +91,9 @@ pipeline {
 
         stage('Test Frontend') {
             steps {
+                script {
+                    currentStageName = 'Test Frontend'
+                }
                 dir('frontend') {
                     echo 'Running Angular unit tests...'
                     sh 'npm run test:ci'
@@ -89,6 +103,9 @@ pipeline {
 
         stage('Build Frontend') {
             steps {
+                script {
+                    currentStageName = 'Build Frontend'
+                }
                 dir('frontend') {
                     echo 'Building Angular app...'
                     sh 'npm run build'
@@ -99,14 +116,34 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
-                        echo "Skipping deploy because current branch is ${env.CURRENT_BRANCH}."
+                    currentStageName = 'Deploy'
+                    if (!params.ENABLE_DEPLOY) {
+                        echo 'Skipping deploy because ENABLE_DEPLOY is false.'
                         return
                     }
 
                     echo 'Deploying application with Docker Compose...'
-                    env.DEPLOY_ATTEMPTED = 'true'
-                    sh 'make prod-up'
+                    deployAttempted = true
+                    sh """
+                        set -e
+
+                        mkdir -p "${DEPLOY_DIR}"
+
+                        rsync -a --delete \
+                          --exclude '.git/' \
+                          --exclude '.jenkins-last-successful-deploy' \
+                          --exclude 'backend/docker.env' \
+                          --exclude 'backend/certs/' \
+                          --exclude 'backend/keys/' \
+                          --exclude 'frontend/node_modules/' \
+                          --exclude 'frontend/coverage/' \
+                          --exclude 'frontend/reports/' \
+                          ./ "${DEPLOY_DIR}/"
+
+                        cd "${DEPLOY_DIR}"
+                        docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+                    """
+                    deploySucceeded = true
                 }
             }
         }
@@ -114,19 +151,51 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    if (env.CURRENT_BRANCH != env.DEPLOY_BRANCH) {
-                        echo "Skipping health check because current branch is ${env.CURRENT_BRANCH}."
+                    currentStageName = 'Health Check'
+                    if (!params.ENABLE_DEPLOY) {
+                        echo 'Skipping health check because ENABLE_DEPLOY is false.'
                         return
                     }
 
-                    echo 'Checking gateway health endpoint...'
-                    sh 'curl -kfsS https://localhost:8443/actuator/health | grep -q "\"status\":\"UP\""'
+                    echo 'Waiting for gateway health endpoint to become ready...'
+                    sh '''
+                        set -e
 
-                    echo 'Checking frontend availability...'
-                    sh 'curl -kfsS https://localhost:4200 > /dev/null'
+                        for attempt in $(seq 1 6); do
+                          if curl -kfsS https://host.docker.internal:8443/actuator/health | grep -q '"status":"UP"'; then
+                            echo "Gateway is healthy on attempt ${attempt}."
+                            exit 0
+                          fi
+
+                          echo "Gateway not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
+                          sleep 5
+                        done
+
+                        echo 'Gateway health check did not succeed in time.'
+                        exit 1
+                    '''
+
+                    echo 'Waiting for frontend to become reachable...'
+                    sh '''
+                        set -e
+
+                        for attempt in $(seq 1 6); do
+                          if curl -kfsS https://host.docker.internal:4200 > /dev/null; then
+                            echo "Frontend is reachable on attempt ${attempt}."
+                            exit 0
+                          fi
+
+                          echo "Frontend not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
+                          sleep 5
+                        done
+
+                        echo 'Frontend health check did not succeed in time.'
+                        exit 1
+                    '''
 
                     echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
-                    writeFile file: env.LAST_SUCCESSFUL_DEPLOY_FILE, text: "${env.CURRENT_COMMIT}\n"
+                    sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
+                    healthCheckPassed = true
                 }
             }
         }
@@ -153,8 +222,13 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Deploy enabled: ${params.ENABLE_DEPLOY}
+Deploy attempted: ${deployAttempted}
+Deploy succeeded: ${deploySucceeded}
+Health check passed: ${healthCheckPassed}
+Rollback triggered: ${rollbackTriggered}
+Build URL: ${env.BUILD_URL ?: 'N/A'}
 """
                 )
             }
@@ -162,19 +236,49 @@ Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
             script {
-                if (env.DEPLOY_ATTEMPTED == 'true' && env.CURRENT_BRANCH == env.DEPLOY_BRANCH && fileExists(env.LAST_SUCCESSFUL_DEPLOY_FILE)) {
-                    def previousCommit = readFile(env.LAST_SUCCESSFUL_DEPLOY_FILE).trim()
+                if (deployAttempted) {
+                    def rollbackFileExists = sh(
+                        script: "[ -f '${env.LAST_SUCCESSFUL_DEPLOY_FILE}' ]",
+                        returnStatus: true
+                    ) == 0
 
-                    if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
-                        echo "Rolling back to previous successful commit ${previousCommit}..."
-                        env.ROLLBACK_TRIGGERED = 'true'
-                        sh "git checkout ${previousCommit}"
-                        sh 'make prod-up'
+                    if (rollbackFileExists) {
+                        def previousCommit = sh(
+                            script: "cat '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'",
+                            returnStdout: true
+                        ).trim()
+
+                        if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
+                            echo "Rolling back to previous successful commit ${previousCommit}..."
+                            rollbackTriggered = true
+                            sh "git checkout ${previousCommit}"
+                            sh """
+                                set -e
+
+                                mkdir -p "${DEPLOY_DIR}"
+
+                                rsync -a --delete \
+                                  --exclude '.git/' \
+                                  --exclude '.jenkins-last-successful-deploy' \
+                                  --exclude 'backend/docker.env' \
+                                  --exclude 'backend/certs/' \
+                                  --exclude 'backend/keys/' \
+                                  --exclude 'frontend/node_modules/' \
+                                  --exclude 'frontend/coverage/' \
+                                  --exclude 'frontend/reports/' \
+                                  ./ "${DEPLOY_DIR}/"
+
+                                cd "${DEPLOY_DIR}"
+                                docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+                            """
+                        } else {
+                            echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                        }
                     } else {
-                        echo 'Skipping rollback because there is no different previously successful deployed commit.'
+                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_DEPLOY_FILE} does not exist."
                     }
                 } else {
-                    echo 'Skipping rollback because deployment was not attempted or no successful deploy snapshot exists yet.'
+                    echo 'Skipping rollback because deployment was not attempted.'
                 }
 
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
@@ -189,9 +293,14 @@ Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
-Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
-Rollback triggered: ${env.ROLLBACK_TRIGGERED}
+Failed stage: ${currentStageName}
+Deploy enabled: ${params.ENABLE_DEPLOY}
+Deploy attempted: ${deployAttempted}
+Deploy succeeded: ${deploySucceeded}
+Health check passed: ${healthCheckPassed}
+Rollback triggered: ${rollbackTriggered}
+Build URL: ${env.BUILD_URL ?: 'N/A'}
 """
                 )
             }
