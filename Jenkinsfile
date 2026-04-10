@@ -6,7 +6,10 @@ def backendServices = [
     'media-service'
 ]
 def deployAttempted = false
+def deploySucceeded = false
+def healthCheckPassed = false
 def rollbackTriggered = false
+def currentStageName = 'Not started'
 
 pipeline {
     agent any
@@ -50,6 +53,7 @@ pipeline {
             steps {
                 checkout scm
                 script {
+                    currentStageName = 'Checkout Code'
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
@@ -63,6 +67,7 @@ pipeline {
         stage('Verify Backend') {
             steps {
                 script {
+                    currentStageName = 'Verify Backend'
                     backendServices.each { service ->
                         echo "Building ${service}..."
                         dir("backend/${service}") {
@@ -75,6 +80,9 @@ pipeline {
 
         stage('Install Frontend Dependencies') {
             steps {
+                script {
+                    currentStageName = 'Install Frontend Dependencies'
+                }
                 dir('frontend') {
                     sh 'npm ci'
                 }
@@ -83,6 +91,9 @@ pipeline {
 
         stage('Test Frontend') {
             steps {
+                script {
+                    currentStageName = 'Test Frontend'
+                }
                 dir('frontend') {
                     echo 'Running Angular unit tests...'
                     sh 'npm run test:ci'
@@ -92,6 +103,9 @@ pipeline {
 
         stage('Build Frontend') {
             steps {
+                script {
+                    currentStageName = 'Build Frontend'
+                }
                 dir('frontend') {
                     echo 'Building Angular app...'
                     sh 'npm run build'
@@ -102,6 +116,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
+                    currentStageName = 'Deploy'
                     if (!params.ENABLE_DEPLOY) {
                         echo 'Skipping deploy because ENABLE_DEPLOY is false.'
                         return
@@ -128,6 +143,7 @@ pipeline {
                         cd "${DEPLOY_DIR}"
                         docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
                     """
+                    deploySucceeded = true
                 }
             }
         }
@@ -135,6 +151,7 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
+                    currentStageName = 'Health Check'
                     if (!params.ENABLE_DEPLOY) {
                         echo 'Skipping health check because ENABLE_DEPLOY is false.'
                         return
@@ -178,6 +195,7 @@ pipeline {
 
                     echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
                     sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
+                    healthCheckPassed = true
                 }
             }
         }
@@ -206,6 +224,11 @@ Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Deploy enabled: ${params.ENABLE_DEPLOY}
+Deploy attempted: ${deployAttempted}
+Deploy succeeded: ${deploySucceeded}
+Health check passed: ${healthCheckPassed}
+Rollback triggered: ${rollbackTriggered}
+Build URL: ${env.BUILD_URL ?: 'N/A'}
 """
                 )
             }
@@ -271,8 +294,13 @@ Deploy enabled: ${params.ENABLE_DEPLOY}
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+Failed stage: ${currentStageName}
 Deploy enabled: ${params.ENABLE_DEPLOY}
+Deploy attempted: ${deployAttempted}
+Deploy succeeded: ${deploySucceeded}
+Health check passed: ${healthCheckPassed}
 Rollback triggered: ${rollbackTriggered}
+Build URL: ${env.BUILD_URL ?: 'N/A'}
 """
                 )
             }
