@@ -29,3 +29,5 @@
 cd backend/gateway-service
 ./mvnw spring-boot:run
 ```
+
+
