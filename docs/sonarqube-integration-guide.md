@@ -66,27 +66,7 @@ Coverage inputs:
 - Backend JaCoCo XML reports from all services
 - Frontend LCOV report from Angular/Karma
 
-## 3) GitHub Integration (Automatic Scan On Push And PR)
-
-This repository includes:
-
-- [.github/workflows/sonarqube-analysis.yml](../.github/workflows/sonarqube-analysis.yml)
-
-The workflow runs on every:
-
-- `push` (all branches)
-- `pull_request` (all branches)
-- daily schedule (`0 2 * * *` UTC) for continuous monitoring
-
-Required GitHub repository secrets:
-
-- `SONAR_HOST_URL` (example: `http://<your-sonarqube-host>:9000`)
-- `SONAR_TOKEN` (generated in SonarQube)
-
-The workflow runs backend tests + frontend tests with coverage, then executes Sonar scan and waits for quality gate.
-If the quality gate fails, the workflow fails.
-
-## 4) CI/CD Pipeline Integration (Jenkins)
+## 3) CI/CD Pipeline Integration (Jenkins)
 
 Jenkins pipeline has a new `SonarQube Analysis` stage in:
 
@@ -106,7 +86,7 @@ Required Jenkins environment/credentials:
 
 If these variables are missing, pipeline fails immediately with a clear message.
 
-## 5) Continuous Monitoring
+## 4) Continuous Monitoring
 
 Recommended operations:
 
@@ -119,7 +99,7 @@ Recommended operations:
    - Duplications
 3. Review trends after each merge and sprint.
 
-## 6) Review And Approval Process
+## 5) Review And Approval Process
 
 Pull request template added:
 
@@ -130,15 +110,13 @@ Process to enforce:
 1. Require PR review approval before merge.
 2. Require passing checks:
    - Jenkins pipeline
-   - `SonarQube Analysis` GitHub workflow
 3. Block merge when quality gate fails.
 4. Resolve SonarQube issues before approval, or document explicit justification in SonarQube for accepted risks.
 
 GitHub branch protection should be configured to require these checks on target branches.
 
-## 7) Notes About Branch/PR Analysis Support
+## 6) Notes About Branch/PR Analysis Support
 
-This setup triggers scans on every push and pull request.
+This setup triggers scans from Jenkins on branch and pull request validation flows.
 Advanced branch/PR decoration capabilities in SonarQube depend on the SonarQube edition and ALM binding configuration.
-
 
