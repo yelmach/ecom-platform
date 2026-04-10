@@ -47,7 +47,7 @@ pipeline {
         DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
         LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
         SONAR_PROJECT_KEY = 'ecom-platform'
-        SONAR_HOST_URL = 'http://host.docker.internal:9000'
+        SONAR_HOST_URL = 'http://84.8.216.100:9002'
         SONAR_TOKEN = credentials('sonar-token-ecom')
     }
 
