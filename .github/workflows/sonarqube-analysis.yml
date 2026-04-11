@@ -61,6 +61,7 @@ jobs:
             -e SONAR_TOKEN="${SONAR_TOKEN}" \
             -v "${GITHUB_WORKSPACE}:/usr/src" \
             sonarsource/sonar-scanner-cli:latest \
+            -Dproject.settings=/usr/src/sonarQube/sonar-project.properties \
             -Dsonar.projectKey=ecom-platform \
             -Dsonar.qualitygate.wait=true \
             -Dsonar.qualitygate.timeout=300
