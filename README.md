@@ -28,7 +28,7 @@ Frontend:
 - `docs/backend-unit-testing-guide.md` (JUnit + backend testing walkthrough)
 - `frontend/README.md`
 - `docs/frontend-unit-testing-guide.md` (Jasmine/Karma frontend testing walkthrough)
-- `docs/jenkins-ci-guide.md` (Jenkins setup + CI pipeline walkthrough)
+- `docs/jenkins-guide.md` (Jenkins setup + CI pipeline walkthrough)
 
 ## Config files
 
