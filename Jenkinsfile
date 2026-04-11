@@ -144,13 +144,38 @@ test -f sonarQube/sonar-project.properties || {
   exit 1
 }
 
-docker run --rm \
-  --add-host=host.docker.internal:host-gateway \
-  --volumes-from "$(hostname)" \
-  -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-  -e SONAR_TOKEN="${SONAR_TOKEN}" \
-  -w "$PWD" \
-  sonarsource/sonar-scanner-cli:latest \
+SCANNER_VERSION="8.0.1.6346"
+SCANNER_BASE_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli"
+SCANNER_ROOT="${WORKSPACE}/.sonar/scanner"
+CACHE_DIR="${WORKSPACE}/.sonar/cache"
+
+case "$(uname -m)" in
+  aarch64|arm64)
+    SCANNER_FLAVOR="linux-aarch64"
+    ;;
+  x86_64|amd64)
+    SCANNER_FLAVOR="linux-x64"
+    ;;
+  *)
+    echo "ERROR: unsupported architecture $(uname -m) for SonarScanner CLI"
+    exit 1
+    ;;
+esac
+
+SCANNER_ARCHIVE="sonar-scanner-cli-${SCANNER_VERSION}-${SCANNER_FLAVOR}.zip"
+SCANNER_DIR="sonar-scanner-${SCANNER_VERSION}-${SCANNER_FLAVOR}"
+SCANNER_URL="${SCANNER_BASE_URL}/${SCANNER_ARCHIVE}"
+
+mkdir -p "${SCANNER_ROOT}" "${CACHE_DIR}"
+
+if [ ! -x "${SCANNER_ROOT}/${SCANNER_DIR}/bin/sonar-scanner" ]; then
+  rm -rf "${SCANNER_ROOT:?}/${SCANNER_DIR}"
+  curl -fsSL "${SCANNER_URL}" -o "${SCANNER_ROOT}/${SCANNER_ARCHIVE}"
+  unzip -qo "${SCANNER_ROOT}/${SCANNER_ARCHIVE}" -d "${SCANNER_ROOT}"
+fi
+
+export SONAR_USER_HOME="${CACHE_DIR}"
+"${SCANNER_ROOT}/${SCANNER_DIR}/bin/sonar-scanner" \
   -Dproject.settings="$PWD/sonarQube/sonar-project.properties" \
   -Dsonar.projectKey="${SONAR_PROJECT_KEY}" \
   -Dsonar.qualitygate.wait=true \
