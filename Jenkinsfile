@@ -9,6 +9,8 @@ def deployAttempted = false
 def deploySucceeded = false
 def healthCheckPassed = false
 def rollbackTriggered = false
+def sonarAnalysisAttempted = false
+def qualityGateStatus = 'NOT_RUN'
 def currentStageName = 'Not started'
 
 pipeline {
@@ -24,6 +26,11 @@ pipeline {
             name: 'EMAIL_RECIPIENTS',
             defaultValue: '',
             description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
+        )
+        booleanParam(
+            name: 'ENABLE_SONAR_ANALYSIS',
+            defaultValue: true,
+            description: 'Run SonarQube analysis and enforce the Quality Gate before deployment'
         )
     }
 
@@ -109,6 +116,52 @@ pipeline {
                 dir('frontend') {
                     echo 'Building Angular app...'
                     sh 'npm run build'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    currentStageName = 'SonarQube Analysis'
+                    if (!params.ENABLE_SONAR_ANALYSIS) {
+                        qualityGateStatus = 'SKIPPED'
+                        echo 'Skipping SonarQube analysis because ENABLE_SONAR_ANALYSIS is false.'
+                        return
+                    }
+
+                    sonarAnalysisAttempted = true
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+                        sh """
+                            "${scannerHome}/bin/sonar-scanner" \
+                              -Dsonar.projectVersion="${env.BUILD_NUMBER}" \
+                              -Dsonar.scm.revision="${env.CURRENT_COMMIT}"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    currentStageName = 'Quality Gate'
+                    if (!params.ENABLE_SONAR_ANALYSIS) {
+                        qualityGateStatus = 'SKIPPED'
+                        echo 'Skipping Quality Gate because ENABLE_SONAR_ANALYSIS is false.'
+                        return
+                    }
+
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qualityGate = waitForQualityGate()
+                        qualityGateStatus = qualityGate.status
+
+                        if (qualityGate.status != 'OK') {
+                            error "Pipeline aborted because the SonarQube Quality Gate returned ${qualityGate.status}."
+                        }
+                    }
                 }
             }
         }
@@ -204,7 +257,7 @@ pipeline {
     post {
         always {
             junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml,frontend/reports/junit/*.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: 'frontend/coverage/**'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'backend/**/target/site/jacoco/**,frontend/coverage/**'
             echo 'Pipeline execution complete.'
         }
         success {
@@ -223,6 +276,9 @@ pipeline {
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
+SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
+SonarQube attempted: ${sonarAnalysisAttempted}
+Quality Gate: ${qualityGateStatus}
 Deploy enabled: ${params.ENABLE_DEPLOY}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
@@ -295,6 +351,9 @@ Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Failed stage: ${currentStageName}
+SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
+SonarQube attempted: ${sonarAnalysisAttempted}
+Quality Gate: ${qualityGateStatus}
 Deploy enabled: ${params.ENABLE_DEPLOY}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}

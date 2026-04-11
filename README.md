@@ -29,6 +29,7 @@ Frontend:
 - `frontend/README.md`
 - `docs/frontend-unit-testing-guide.md` (Jasmine/Karma frontend testing walkthrough)
 - `docs/jenkins-guide.md` (Jenkins setup + CI pipeline walkthrough)
+- `docs/sonarqube-guide.md` (SonarQube setup + Jenkins quality gate walkthrough)
 
 ## Config files
 
@@ -136,6 +137,7 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 - Eureka: `http://localhost:8761`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
+- SonarQube: `http://localhost:9002`
 
 ## API flow notes
 
