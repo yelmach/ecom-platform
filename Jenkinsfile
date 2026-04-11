@@ -10,6 +10,8 @@ def deploySucceeded = false
 def healthCheckPassed = false
 def rollbackTriggered = false
 def currentStageName = 'Not started'
+def isMainBranchBuild = false
+def isPullRequestBuild = false
 
 pipeline {
     agent any
@@ -57,12 +59,20 @@ pipeline {
                 checkout scm
                 script {
                     currentStageName = 'Checkout Code'
+                    env.CURRENT_BRANCH = env.BRANCH_NAME ?: sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
+                    isPullRequestBuild = !!env.CHANGE_ID?.trim()
+                    isMainBranchBuild = env.CURRENT_BRANCH == 'main'
 
+                    echo "Detected branch: ${env.CURRENT_BRANCH}"
                     echo "Detected commit: ${env.CURRENT_COMMIT}"
+                    echo "Pull request build: ${isPullRequestBuild}"
                 }
             }
         }
@@ -157,6 +167,14 @@ docker run --rm \
                         echo 'Skipping deploy because ENABLE_DEPLOY is false.'
                         return
                     }
+                    if (!isMainBranchBuild) {
+                        echo "Skipping deploy because branch ${env.CURRENT_BRANCH} is not main."
+                        return
+                    }
+                    if (isPullRequestBuild) {
+                        echo 'Skipping deploy because this is a pull request build.'
+                        return
+                    }
 
                     echo 'Deploying application with Docker Compose...'
                     deployAttempted = true
@@ -190,6 +208,14 @@ docker run --rm \
                     currentStageName = 'Health Check'
                     if (!params.ENABLE_DEPLOY) {
                         echo 'Skipping health check because ENABLE_DEPLOY is false.'
+                        return
+                    }
+                    if (!isMainBranchBuild) {
+                        echo "Skipping health check because branch ${env.CURRENT_BRANCH} is not main."
+                        return
+                    }
+                    if (isPullRequestBuild) {
+                        echo 'Skipping health check because this is a pull request build.'
                         return
                     }
 
@@ -258,6 +284,8 @@ docker run --rm \
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Pull request build: ${isPullRequestBuild}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Deploy enabled: ${params.ENABLE_DEPLOY}
 Deploy attempted: ${deployAttempted}
@@ -329,6 +357,8 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.CURRENT_BRANCH ?: 'N/A'}
+Pull request build: ${isPullRequestBuild}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Failed stage: ${currentStageName}
 Deploy enabled: ${params.ENABLE_DEPLOY}
