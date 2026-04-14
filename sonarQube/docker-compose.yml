@@ -10,7 +10,7 @@ services:
       - sonarqube_postgresql:/var/lib/postgresql
       - sonarqube_postgresql_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sonar -d sonarqube"]
+      test: ["CMD-SHELL", "pg_isready -U ${SONARQUBE_DB_USER} -d ${SONARQUBE_DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 10
