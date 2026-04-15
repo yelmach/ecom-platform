@@ -18,6 +18,10 @@ public class ProductRequest {
     @Size(max = 2000, message = "Description cannot exceed 2000 characters")
     private String description;
 
+    @NotBlank(message = "Category is required")
+    @Size(max = 60, message = "Category cannot exceed 60 characters")
+    private String category;
+
     @NotNull(message = "Price is required")
     @DecimalMin(value = "0.01", message = "Price must be greater than 0")
     private Double price;
@@ -25,6 +29,5 @@ public class ProductRequest {
     @Min(value = 0, message = "Quantity cannot be negative")
     private Integer quantity;
 
-    
     private List<String> mediaIds;
 }

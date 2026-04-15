@@ -18,6 +18,10 @@ public class ProductUpdateRequest {
     @Size(max = 2000, message = "Description cannot exceed 2000 characters")
     private String description;
 
+    @Pattern(regexp = ".*\\S.*", message = "Category cannot be blank")
+    @Size(max = 60, message = "Category cannot exceed 60 characters")
+    private String category;
+
     @DecimalMin(value = "0.01", message = "Price must be greater than 0")
     private Double price;
 

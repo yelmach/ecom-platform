@@ -20,6 +20,7 @@ import ecom.product_service.dto.request.ProductUpdateRequest;
 import ecom.product_service.dto.response.ProductResponse;
 import ecom.product_service.service.ProductService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +34,14 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<Page<ProductResponse>> getProducts(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String category,
+            @RequestParam(required = false) @DecimalMin(value = "0.0") Double minPrice,
+            @RequestParam(required = false) @DecimalMin(value = "0.0") Double maxPrice,
+            @RequestParam(defaultValue = "newest") String sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
-        return ResponseEntity.ok(productService.getProducts(page, size));
+        return ResponseEntity.ok(productService.getProducts(keyword, category, minPrice, maxPrice, sort, page, size));
     }
 
     @GetMapping("/me")

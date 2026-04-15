@@ -13,6 +13,7 @@ public class ProductResponse {
     private String id;
     private String name;
     private String description;
+    private String category;
     private Double price;
     private Integer quantity;
     private List<String> mediaIds;
@@ -25,6 +26,7 @@ public class ProductResponse {
                 .id(product.getId())
                 .name(product.getName())
                 .description(product.getDescription())
+                .category(product.getCategory())
                 .price(product.getPrice())
                 .quantity(product.getQuantity())
                 .mediaIds(product.getMediaIds())

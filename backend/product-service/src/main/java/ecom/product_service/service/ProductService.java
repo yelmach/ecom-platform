@@ -1,14 +1,14 @@
 package ecom.product_service.service;
 
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import ecom.product_service.dto.request.ProductRequest;
 import ecom.product_service.dto.request.ProductUpdateRequest;
@@ -25,15 +25,20 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final MediaValidationService mediaValidationService;
 
-    public Page<ProductResponse> getProducts(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Product> products = productRepository.findAll(pageable);
+    public Page<ProductResponse> getProducts(String keyword, String category, Double minPrice, Double maxPrice,
+            String sort,
+            int page, int size) {
+
+        validatePrices(minPrice, maxPrice);
+
+        Pageable pageable = PageRequest.of(page, size, ProductSort.fromValue(sort).toSort());
+        Page<Product> products = searchProducts(keyword, category, minPrice, maxPrice, pageable);
 
         return products.map(ProductResponse::fromEntity);
     }
 
     public Page<ProductResponse> getProductsBySeller(String sellerId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size, ProductSort.NEWEST.toSort());
         Page<Product> products = productRepository.findBySellerId(sellerId, pageable);
 
         return products.map(ProductResponse::fromEntity);
@@ -53,6 +58,7 @@ public class ProductService {
         Product product = Product.builder()
                 .name(request.getName())
                 .description(request.getDescription())
+                .category(requireCategory(request.getCategory()))
                 .price(request.getPrice())
                 .quantity(request.getQuantity())
                 .mediaIds(new ArrayList<>())
@@ -71,6 +77,9 @@ public class ProductService {
         }
         if (request.getDescription() != null) {
             existingProduct.setDescription(request.getDescription());
+        }
+        if (request.getCategory() != null) {
+            existingProduct.setCategory(requireCategory(request.getCategory()));
         }
         if (request.getPrice() != null) {
             existingProduct.setPrice(request.getPrice());
@@ -101,5 +110,54 @@ public class ProductService {
         if (!product.getSellerId().equals(sellerId)) {
             throw new ProductOwnershipException();
         }
+    }
+
+    private void validatePrices(Double minPrice, Double maxPrice) {
+        if (minPrice != null && minPrice < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minPrice must be greater than or equal to 0");
+        }
+        if (maxPrice != null && maxPrice < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxPrice must be greater than or equal to 0");
+        }
+
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "minPrice cannot be greater than maxPrice");
+        }
+    }
+
+    private String requireCategory(String category) {
+        String checkedCategory = checkedCategory(category);
+        if (checkedCategory.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is required");
+        }
+        return checkedCategory;
+    }
+
+    private String checkedCategory(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private Page<Product> searchProducts(String keyword, String category, Double minPrice, Double maxPrice,
+            Pageable pageable) {
+        String checkedKeyword = checkedCategory(keyword);
+        String checkedCategory = checkedCategory(category);
+
+        Double minP = minPrice == null ? 0.0 : minPrice;
+        Double maxP = maxPrice == null ? Double.MAX_VALUE : maxPrice;
+
+        if (!checkedKeyword.isBlank() && !checkedCategory.isBlank()) {
+            return productRepository.searchByCategoryAndKeyword("^" + Pattern.quote(checkedCategory) + "$",
+                    Pattern.quote(checkedKeyword), minP, maxP, pageable);
+        }
+
+        if (!checkedKeyword.isBlank()) {
+            return productRepository.searchByKeyword(Pattern.quote(checkedKeyword), minP, maxP, pageable);
+        }
+
+        if (!checkedCategory.isBlank()) {
+            return productRepository.searchByCategory("^" + Pattern.quote(checkedCategory) + "$", minP, maxP, pageable);
+        }
+
+        return productRepository.searchByPriceRange(minP, maxP, pageable);
     }
 }
