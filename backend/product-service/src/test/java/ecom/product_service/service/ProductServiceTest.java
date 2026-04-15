@@ -51,6 +51,7 @@ class ProductServiceTest {
                 .id("prod-1")
                 .name("Keyboard")
                 .description("Mechanical keyboard")
+                .category("Electronics")
                 .price(89.99)
                 .quantity(5)
                 .mediaIds(List.of("m1"))
@@ -61,13 +62,96 @@ class ProductServiceTest {
     @Test
     void getProducts_ShouldReturnMappedPage() {
         Page<Product> productPage = new PageImpl<>(List.of(product));
-        when(productRepository.findAll(any(Pageable.class))).thenReturn(productPage);
+        when(productRepository.searchByPriceRange(eq(0.0), eq(Double.MAX_VALUE), any(Pageable.class)))
+                .thenReturn(productPage);
 
-        Page<ProductResponse> response = productService.getProducts(0, 10);
+        Page<ProductResponse> response = productService.getProducts("", "", null, null, "newest", 0, 10);
 
         assertEquals(1, response.getTotalElements());
         assertEquals("prod-1", response.getContent().get(0).getId());
         assertEquals("Keyboard", response.getContent().get(0).getName());
+        assertEquals("Electronics", response.getContent().get(0).getCategory());
+    }
+
+    @Test
+    void getProducts_ShouldUseKeywordAndCategoryQueryWhenBothFiltersExist() {
+        Page<Product> productPage = new PageImpl<>(List.of(product));
+        when(productRepository.searchByCategoryAndKeyword(
+                eq("^\\QElectronics\\E$"),
+                eq("\\QKeyboard\\E"),
+                eq(10.0),
+                eq(100.0),
+                any(Pageable.class)))
+                .thenReturn(productPage);
+
+        Page<ProductResponse> response = productService.getProducts("Keyboard", "Electronics", 10.0, 100.0, "newest", 0,
+                10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(productRepository).searchByCategoryAndKeyword(
+                eq("^\\QElectronics\\E$"),
+                eq("\\QKeyboard\\E"),
+                eq(10.0),
+                eq(100.0),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getProducts_ShouldUseKeywordQueryWhenOnlyKeywordExists() {
+        Page<Product> productPage = new PageImpl<>(List.of(product));
+        when(productRepository.searchByKeyword(
+                eq("\\QKeyboard\\E"),
+                eq(0.0),
+                eq(Double.MAX_VALUE),
+                any(Pageable.class)))
+                .thenReturn(productPage);
+
+        Page<ProductResponse> response = productService.getProducts("Keyboard", "", null, null, "newest", 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(productRepository).searchByKeyword(
+                eq("\\QKeyboard\\E"),
+                eq(0.0),
+                eq(Double.MAX_VALUE),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getProducts_ShouldUseCategoryQueryWhenOnlyCategoryExists() {
+        Page<Product> productPage = new PageImpl<>(List.of(product));
+        when(productRepository.searchByCategory(
+                eq("^\\QElectronics\\E$"),
+                eq(0.0),
+                eq(Double.MAX_VALUE),
+                any(Pageable.class)))
+                .thenReturn(productPage);
+
+        Page<ProductResponse> response = productService.getProducts("", "Electronics", null, null, "newest", 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(productRepository).searchByCategory(
+                eq("^\\QElectronics\\E$"),
+                eq(0.0),
+                eq(Double.MAX_VALUE),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getProducts_ShouldUsePriceRangeQueryWhenOnlyPriceFiltersExist() {
+        Page<Product> productPage = new PageImpl<>(List.of(product));
+        when(productRepository.searchByPriceRange(
+                eq(10.0),
+                eq(100.0),
+                any(Pageable.class)))
+                .thenReturn(productPage);
+
+        Page<ProductResponse> response = productService.getProducts("", "", 10.0, 100.0, "newest", 0, 10);
+
+        assertEquals(1, response.getTotalElements());
+        verify(productRepository).searchByPriceRange(
+                eq(10.0),
+                eq(100.0),
+                any(Pageable.class));
     }
 
     @Test
@@ -103,6 +187,7 @@ class ProductServiceTest {
         ProductRequest request = new ProductRequest();
         request.setName("Mouse");
         request.setDescription("Gaming mouse");
+        request.setCategory("Electronics");
         request.setPrice(49.99);
         request.setQuantity(10);
 
@@ -110,6 +195,7 @@ class ProductServiceTest {
                 .id("prod-2")
                 .name("Mouse")
                 .description("Gaming mouse")
+                .category("Electronics")
                 .price(49.99)
                 .quantity(10)
                 .mediaIds(List.of())
@@ -131,9 +217,27 @@ class ProductServiceTest {
         ProductRequest request = new ProductRequest();
         request.setName("Mouse");
         request.setDescription("Gaming mouse");
+        request.setCategory("Electronics");
         request.setPrice(49.99);
         request.setQuantity(10);
         request.setMediaIds(List.of("media-1"));
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> productService.createProduct(request, "seller-1"));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void createProduct_ShouldRejectBlankCategory() {
+        ProductRequest request = new ProductRequest();
+        request.setName("Mouse");
+        request.setDescription("Gaming mouse");
+        request.setCategory("   ");
+        request.setPrice(49.99);
+        request.setQuantity(10);
 
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,
@@ -148,6 +252,7 @@ class ProductServiceTest {
         ProductUpdateRequest request = new ProductUpdateRequest();
         request.setName("Keyboard Pro");
         request.setDescription("Updated");
+        request.setCategory("Accessories");
         request.setPrice(99.99);
         request.setQuantity(7);
         request.setMediaIds(List.of("m2", "m3"));
@@ -159,6 +264,7 @@ class ProductServiceTest {
 
         assertEquals("Keyboard Pro", response.getName());
         assertEquals("Updated", response.getDescription());
+        assertEquals("Accessories", response.getCategory());
         assertEquals(99.99, response.getPrice());
         assertEquals(7, response.getQuantity());
         assertEquals(List.of("m2", "m3"), response.getMediaIds());
@@ -170,7 +276,22 @@ class ProductServiceTest {
         ProductUpdateRequest request = new ProductUpdateRequest();
         when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
 
-        assertThrows(ProductOwnershipException.class, () -> productService.updateProduct("prod-1", request, "seller-2"));
+        assertThrows(ProductOwnershipException.class,
+                () -> productService.updateProduct("prod-1", request, "seller-2"));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void updateProduct_ShouldRejectBlankCategory() {
+        ProductUpdateRequest request = new ProductUpdateRequest();
+        request.setCategory("  ");
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> productService.updateProduct("prod-1", request, "seller-1"));
+
+        assertEquals(400, ex.getStatusCode().value());
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -189,5 +310,23 @@ class ProductServiceTest {
 
         assertThrows(ProductOwnershipException.class, () -> productService.deleteProduct("prod-1", "seller-2"));
         verify(productRepository, never()).delete(any(Product.class));
+    }
+
+    @Test
+    void getProducts_ShouldThrowWhenSortIsInvalid() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> productService.getProducts("", "", null, null, "unknown", 0, 10));
+
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void getProducts_ShouldThrowWhenPriceRangeIsInvalid() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> productService.getProducts("", "", 100.0, 50.0, "newest", 0, 10));
+
+        assertEquals(400, ex.getStatusCode().value());
     }
 }
