@@ -5,6 +5,7 @@ def backendServices = [
     'product-service',
     'media-service'
 ]
+
 def deployAttempted = false
 def deploySucceeded = false
 def healthCheckPassed = false
@@ -18,19 +19,19 @@ pipeline {
 
     parameters {
         booleanParam(
-            name: 'ENABLE_DEPLOY',
+            name: 'ENABLE_SONAR_ANALYSIS',
             defaultValue: true,
-            description: 'Run deployment and post-deploy health checks after a successful build'
+            description: 'Run SonarQube analysis and enforce the Quality Gate before deployment'
         )
         string(
             name: 'EMAIL_RECIPIENTS',
             defaultValue: '',
-            description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
+            description: 'Comma-separated email recipients'
         )
-        booleanParam(
-            name: 'ENABLE_SONAR_ANALYSIS',
-            defaultValue: true,
-            description: 'Run SonarQube analysis and enforce the Quality Gate before deployment'
+        string(
+            name: 'DEPLOY_HOST',
+            defaultValue: 'host.docker.internal',
+            description: 'Host used for post-deploy health checks, for example 129.x.x.x'
         )
     }
 
@@ -39,10 +40,6 @@ pipeline {
         disableConcurrentBuilds()
         skipDefaultCheckout(true)
         buildDiscarder(logRotator(numToKeepStr: '10'))
-    }
-
-    triggers {
-        githubPush()
     }
 
     tools {
@@ -58,15 +55,25 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                checkout scm
                 script {
                     currentStageName = 'Checkout Code'
+                }
+
+                checkout scm
+
+                script {
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
 
-                    echo "Detected commit: ${env.CURRENT_COMMIT}"
+                    if (!params.ENABLE_SONAR_ANALYSIS) {
+                        qualityGateStatus = 'SKIPPED'
+                    }
+
+                    echo "Branch: ${env.BRANCH_NAME ?: env.CHANGE_BRANCH ?: 'unknown'}"
+                    echo "PR ID: ${env.CHANGE_ID ?: 'N/A'}"
+                    echo "Commit: ${env.CURRENT_COMMIT}"
                 }
             }
         }
@@ -75,8 +82,9 @@ pipeline {
             steps {
                 script {
                     currentStageName = 'Verify Backend'
+
                     backendServices.each { service ->
-                        echo "Building ${service}..."
+                        echo "Verifying ${service}..."
                         dir("backend/${service}") {
                             sh './mvnw -B -ntp clean verify'
                         }
@@ -90,6 +98,7 @@ pipeline {
                 script {
                     currentStageName = 'Install Frontend Dependencies'
                 }
+
                 dir('frontend') {
                     sh 'npm ci'
                 }
@@ -101,8 +110,8 @@ pipeline {
                 script {
                     currentStageName = 'Test Frontend'
                 }
+
                 dir('frontend') {
-                    echo 'Running Angular unit tests...'
                     sh 'npm run test:ci'
                 }
             }
@@ -113,24 +122,22 @@ pipeline {
                 script {
                     currentStageName = 'Build Frontend'
                 }
+
                 dir('frontend') {
-                    echo 'Building Angular app...'
                     sh 'npm run build'
                 }
             }
         }
 
         stage('SonarQube Analysis') {
+            when {
+                expression { return params.ENABLE_SONAR_ANALYSIS }
+            }
             steps {
                 script {
                     currentStageName = 'SonarQube Analysis'
-                    if (!params.ENABLE_SONAR_ANALYSIS) {
-                        qualityGateStatus = 'SKIPPED'
-                        echo 'Skipping SonarQube analysis because ENABLE_SONAR_ANALYSIS is false.'
-                        return
-                    }
-
                     sonarAnalysisAttempted = true
+
                     def scannerHome = tool 'sonar-scanner'
 
                     withSonarQubeEnv('sonarqube') {
@@ -145,14 +152,12 @@ pipeline {
         }
 
         stage('Quality Gate') {
+            when {
+                expression { return params.ENABLE_SONAR_ANALYSIS }
+            }
             steps {
                 script {
                     currentStageName = 'Quality Gate'
-                    if (!params.ENABLE_SONAR_ANALYSIS) {
-                        qualityGateStatus = 'SKIPPED'
-                        echo 'Skipping Quality Gate because ENABLE_SONAR_ANALYSIS is false.'
-                        return
-                    }
 
                     timeout(time: 10, unit: 'MINUTES') {
                         def qualityGate = waitForQualityGate()
@@ -167,16 +172,17 @@ pipeline {
         }
 
         stage('Deploy') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
             steps {
                 script {
                     currentStageName = 'Deploy'
-                    if (!params.ENABLE_DEPLOY) {
-                        echo 'Skipping deploy because ENABLE_DEPLOY is false.'
-                        return
-                    }
-
-                    echo 'Deploying application with Docker Compose...'
                     deployAttempted = true
+
                     sh """
                         set -e
 
@@ -196,57 +202,59 @@ pipeline {
                         cd "${DEPLOY_DIR}"
                         docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
                     """
+
                     deploySucceeded = true
                 }
             }
         }
 
         stage('Health Check') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
             steps {
                 script {
                     currentStageName = 'Health Check'
-                    if (!params.ENABLE_DEPLOY) {
-                        echo 'Skipping health check because ENABLE_DEPLOY is false.'
-                        return
-                    }
 
-                    echo 'Waiting for gateway health endpoint to become ready...'
-                    sh '''
+                    echo "Checking gateway on https://${params.DEPLOY_HOST}:8443/actuator/health"
+                    sh """
                         set -e
 
-                        for attempt in $(seq 1 6); do
-                          if curl -kfsS https://host.docker.internal:8443/actuator/health | grep -q '"status":"UP"'; then
-                            echo "Gateway is healthy on attempt ${attempt}."
+                        for attempt in \$(seq 1 6); do
+                          if curl -kfsS "https://${params.DEPLOY_HOST}:8443/actuator/health" | grep -q '"status":"UP"'; then
+                            echo "Gateway is healthy on attempt \${attempt}."
                             exit 0
                           fi
 
-                          echo "Gateway not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
+                          echo "Gateway not ready yet (attempt \${attempt}/6). Waiting 5 seconds..."
                           sleep 5
                         done
 
                         echo 'Gateway health check did not succeed in time.'
                         exit 1
-                    '''
+                    """
 
-                    echo 'Waiting for frontend to become reachable...'
-                    sh '''
+                    echo "Checking frontend on https://${params.DEPLOY_HOST}:4200"
+                    sh """
                         set -e
 
-                        for attempt in $(seq 1 6); do
-                          if curl -kfsS https://host.docker.internal:4200 > /dev/null; then
-                            echo "Frontend is reachable on attempt ${attempt}."
+                        for attempt in \$(seq 1 6); do
+                          if curl -kfsS "https://${params.DEPLOY_HOST}:4200" > /dev/null; then
+                            echo "Frontend is reachable on attempt \${attempt}."
                             exit 0
                           fi
 
-                          echo "Frontend not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
+                          echo "Frontend not ready yet (attempt \${attempt}/6). Waiting 5 seconds..."
                           sleep 5
                         done
 
                         echo 'Frontend health check did not succeed in time.'
                         exit 1
-                    '''
+                    """
 
-                    echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
                     sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
                     healthCheckPassed = true
                 }
@@ -260,8 +268,10 @@ pipeline {
             archiveArtifacts allowEmptyArchive: true, artifacts: 'backend/**/target/site/jacoco/**,frontend/coverage/**'
             echo 'Pipeline execution complete.'
         }
+
         success {
             echo 'Build and tests succeeded.'
+
             script {
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
                     echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
@@ -275,11 +285,12 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+PR ID: ${env.CHANGE_ID ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
 SonarQube attempted: ${sonarAnalysisAttempted}
 Quality Gate: ${qualityGateStatus}
-Deploy enabled: ${params.ENABLE_DEPLOY}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}
@@ -289,8 +300,10 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                 )
             }
         }
+
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
+
             script {
                 if (deployAttempted) {
                     def rollbackFileExists = sh(
@@ -307,7 +320,9 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                         if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
                             echo "Rolling back to previous successful commit ${previousCommit}..."
                             rollbackTriggered = true
+
                             sh "git checkout ${previousCommit}"
+
                             sh """
                                 set -e
 
@@ -349,12 +364,13 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+PR ID: ${env.CHANGE_ID ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Failed stage: ${currentStageName}
 SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
 SonarQube attempted: ${sonarAnalysisAttempted}
 Quality Gate: ${qualityGateStatus}
-Deploy enabled: ${params.ENABLE_DEPLOY}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}

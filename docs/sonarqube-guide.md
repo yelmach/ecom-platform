@@ -1,29 +1,71 @@
-# SonarQube Guide
+# SonarQube Integration Guide
 
-## What This Adds
+## Overview
 
-This repository now includes the project-side setup for `SafeZone`:
+This project integrates SonarQube into the existing Jenkins pipeline so code quality analysis runs automatically before deployment.
+
+The integration covers:
 
 - a Dockerized SonarQube stack in `sonarQube/docker-compose.yml`
-- backend JaCoCo XML coverage reports for every Spring Boot service
+- backend Java coverage with JaCoCo
+- frontend Angular coverage with LCOV
 - a root `sonar-project.properties` for monorepo analysis
 - Jenkins stages for SonarQube analysis and Quality Gate enforcement
 
-The remaining setup is done in the SonarQube and Jenkins web UIs.
+The overall pipeline flow is:
 
-## 1) Start SonarQube
+1. checkout code
+2. run backend tests
+3. run frontend tests
+4. build the frontend
+5. submit analysis to SonarQube
+6. wait for the Quality Gate result
+7. deploy only if the Quality Gate passes
 
-Before the first start, make sure `backend/docker.env` contains the SonarQube database values:
+## Files In This Repo
 
-```bash
-sed -n '1,80p' backend/docker.env
+The main files used for the integration are:
+
+- `sonarQube/docker-compose.yml`
+- `sonar-project.properties`
+- `Jenkinsfile`
+- `backend/*/pom.xml`
+
+## 1) SonarQube Runtime Stack
+
+SonarQube runs in its own Docker Compose stack with PostgreSQL.
+
+File:
+
+- `sonarQube/docker-compose.yml`
+
+It defines:
+
+- `postgres`
+- `sonarqube`
+
+Important details:
+
+- the SonarQube image is `sonarqube:community`
+- SonarQube is exposed on host port `9002`
+- PostgreSQL credentials come from `backend/docker.env`
+- Docker named volumes persist database and SonarQube data
+
+### Required Environment Variables
+
+Make sure `backend/docker.env` contains:
+
+```env
+SONARQUBE_DB_NAME=sonarqube
+SONARQUBE_DB_USER=sonar
+SONARQUBE_DB_PASSWORD=your-strong-password
 ```
 
-If you ever need to recreate it, copy the template first:
+The template already includes these keys:
 
-```bash
-cp backend/docker.env.example backend/docker.env
-```
+- `backend/docker.env.example`
+
+## 2) Start SonarQube
 
 From the repo root:
 
@@ -31,119 +73,211 @@ From the repo root:
 make sonar-up
 ```
 
-Open:
+Open SonarQube in the browser:
 
 ```text
-http://localhost:9002
+http://<VM_PUBLIC_IP>:9002
 ```
 
-Stop it with:
-
-```bash
-make sonar-down
-```
-
-Follow logs with:
+Useful commands:
 
 ```bash
 make sonar-logs
+make sonar-down
 ```
 
-## 2) First-Time SonarQube Web Setup
+If you want to confirm the containers are running:
 
-In the SonarQube UI:
+```bash
+docker compose --env-file backend/docker.env -f sonarQube/docker-compose.yml ps
+```
 
-1. Sign in with the default admin account.
-2. Change the default password.
-3. Create a project with the key:
-   - `ecom-platform`
-4. Generate a token for Jenkins.
+## 3) First-Time SonarQube Setup In The UI
 
-## 3) Jenkins Web Setup
+After opening SonarQube:
 
-In Jenkins, install/configure these pieces exactly with these names:
+1. sign in as admin
+2. change the default admin password
+3. create a local project
+4. use:
+   - project name: `ecom-platform`
+   - project key: `ecom-platform`
+   - main branch: your real default branch, usually `main`
+5. generate a token for Jenkins
 
-- Plugin:
-  - `SonarQube Scanner`
-- SonarQube server name:
-  - `sonarqube`
-- SonarScanner tool name:
-  - `sonar-scanner`
+Copy the token immediately. You will store it in Jenkins as a secret.
 
-Add SonarQube server settings in:
+## 4) Jenkins Configuration
 
-`Manage Jenkins -> System`
+This project expects Jenkins to run in Docker on the same VM.
 
-Add the scanner tool in:
-
-`Manage Jenkins -> Tools`
-
-Store the SonarQube token in Jenkins credentials and attach it to the `sonarqube` server configuration.
-
-## 4) Add The Required Webhook
-
-In SonarQube, create a webhook pointing to:
+Because of that, Jenkins should reach SonarQube through:
 
 ```text
-http://<your-jenkins-host>:8080/sonarqube-webhook/
+http://host.docker.internal:9002
 ```
 
-This is required for the Jenkins `waitForQualityGate()` stage.
+That works because the Jenkins container already defines:
 
-## 5) What The Pipeline Now Does
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
 
-The Jenkins pipeline order is now:
+### Install The Jenkins Plugin
 
-1. checkout code
-2. verify backend services
-3. install frontend dependencies
-4. run frontend tests with coverage
-5. build frontend
-6. run SonarQube analysis
-7. wait for the Quality Gate result
-8. deploy only if the Quality Gate passes
+In Jenkins, install:
 
-## 6) Coverage Inputs Used By SonarQube
+- `SonarQube Scanner`
 
-### Backend
+### Add The SonarQube Token
 
-Each backend service now generates JaCoCo XML reports during Maven `verify`:
+In Jenkins credentials:
+
+1. add credential
+2. type: `Secret text`
+3. use:
+   - scope: `Global`
+   - secret: paste the SonarQube token
+   - ID: `sonarqube-token`
+   - description: `SonarQube token for ecom-platform`
+
+### Add The SonarQube Server
+
+Go to:
+
+- `Manage Jenkins -> System`
+
+In the SonarQube section, add a server with:
+
+- name: `sonarqube`
+- server URL: `http://host.docker.internal:9002`
+- credentials: `sonarqube-token`
+
+The server name must match the name used in `Jenkinsfile`.
+
+### Add The Sonar Scanner Tool
+
+Go to:
+
+- `Manage Jenkins -> Tools`
+
+Under `SonarQube Scanner installations`, add a scanner with:
+
+- name: `sonar-scanner`
+
+The tool name must also match the `Jenkinsfile`.
+
+## 5) Required SonarQube Webhook
+
+The Jenkins pipeline uses `waitForQualityGate()`, so SonarQube must send the analysis result back to Jenkins.
+
+In SonarQube, add a webhook:
+
+- name: `jenkins`
+- URL: `http://<VM_PUBLIC_IP>:8080/sonarqube-webhook/`
+
+Keep the trailing slash.
+
+## 6) What The Jenkinsfile Does
+
+The Jenkins integration is already implemented in:
+
+- `Jenkinsfile`
+
+### New Pipeline Parameter
+
+The pipeline now includes:
+
+- `ENABLE_SONAR_ANALYSIS`
+
+This allows you to temporarily skip SonarQube if needed during troubleshooting.
+
+### SonarQube Analysis Stage
+
+The `SonarQube Analysis` stage:
+
+- checks `ENABLE_SONAR_ANALYSIS`
+- loads the Jenkins tool named `sonar-scanner`
+- uses the Jenkins SonarQube server named `sonarqube`
+- runs `sonar-scanner` from the repo root
+
+### Quality Gate Stage
+
+The `Quality Gate` stage:
+
+- waits for SonarQube to finish processing
+- receives the result through the webhook
+- fails the pipeline if the Quality Gate status is not `OK`
+
+Because this stage runs before deploy, bad code quality can stop deployment.
+
+## 7) Coverage Configuration
+
+### Backend Coverage
+
+Each backend service now generates JaCoCo coverage during Maven `verify`.
+
+This is configured in:
+
+- `backend/discovery-service/pom.xml`
+- `backend/gateway-service/pom.xml`
+- `backend/user-service/pom.xml`
+- `backend/product-service/pom.xml`
+- `backend/media-service/pom.xml`
+
+Each service produces:
 
 ```text
-backend/*/target/site/jacoco/jacoco.xml
+target/site/jacoco/jacoco.xml
 ```
 
-### Frontend
+JaCoCo is needed because SonarQube reads coverage reports; it does not generate Java coverage by itself.
 
-Angular/Karma coverage is read from:
+### Frontend Coverage
+
+Angular/Karma already generates LCOV coverage.
+
+SonarQube reads:
 
 ```text
 frontend/coverage/frontend/lcov.info
 ```
 
-## 7) Useful Validation Commands
+## 8) sonar-project.properties
 
-Run backend verification manually:
+The root scanner config is:
 
-```bash
-cd backend/gateway-service && ./mvnw -B -ntp clean verify
-```
+- `sonar-project.properties`
 
-Run frontend tests manually:
+This file tells SonarQube:
 
-```bash
-cd frontend && npm ci && npm run test:ci
-```
+- the project key and name
+- where backend and frontend source files are
+- where test files are
+- which build/generated folders to exclude
+- where Java binaries are
+- where JUnit reports are
+- where JaCoCo XML reports are
+- where frontend LCOV coverage is
+- which TypeScript config files to use
 
-Run a local scanner manually after Jenkins/Sonar setup is complete:
+This repository is analyzed as one monorepo SonarQube project, not as separate SonarQube projects per service.
 
-```bash
-sonar-scanner \
-  -Dsonar.host.url=http://localhost:9002 \
-  -Dsonar.token=<your-token>
-```
+## 9) First Validation Run
 
-## 8) Linux Host Note
+After SonarQube and Jenkins are configured, run the Jenkins job first with:
 
-If SonarQube fails to start on Linux, the host may need Docker/VM kernel tuning for Elasticsearch, especially `vm.max_map_count`.
-Check the SonarQube container logs first before changing anything.
+- `ENABLE_SONAR_ANALYSIS=true`
+- `ENABLE_DEPLOY=false`
+
+This first run is only to validate the quality pipeline without deployment.
+
+You want to see:
+
+- backend tests pass
+- frontend tests pass
+- SonarQube Analysis passes
+- Quality Gate passes
+
+If that works, run the pipeline again with deploy enabled.
