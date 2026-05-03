@@ -49,7 +49,8 @@ pipeline {
     environment {
         CHROME_BIN = '/usr/bin/chromium'
         DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
-        LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
+        RELEASE_ENV_FILE = '/home/opc/ecom-platform-deploy/.release.env'
+        LAST_SUCCESSFUL_RELEASE_FILE = '/home/opc/ecom-platform-deploy/.last-successful-release.env'
     }
 
     stages {
@@ -64,6 +65,11 @@ pipeline {
                 script {
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.CURRENT_SHORT_COMMIT = sh(
+                        script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
 
@@ -171,6 +177,49 @@ pipeline {
             }
         }
 
+        stage('Build and Push Docker Images') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
+            steps {
+                script {
+                    currentStageName = 'Build and Push Docker Images'
+                    env.IMAGE_TAG = env.CURRENT_SHORT_COMMIT
+                    env.IMAGE_REGISTRY = 'ghcr.io/yelmach'
+                }
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh '''
+                        set -e
+
+                        printf 'IMAGE_REGISTRY=%s\nIMAGE_TAG=%s\n' "$IMAGE_REGISTRY" "$IMAGE_TAG" > .release.env
+
+                        echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+                    '''
+
+                    script {
+                        backendServices.each { service ->
+                            sh """
+                                docker build -t ${env.IMAGE_REGISTRY}/ecom-${service}:${env.IMAGE_TAG} backend/${service}
+                                docker push ${env.IMAGE_REGISTRY}/ecom-${service}:${env.IMAGE_TAG}
+                            """
+                        }
+
+                        sh """
+                            docker build -t ${env.IMAGE_REGISTRY}/ecom-frontend:${env.IMAGE_TAG} frontend
+                            docker push ${env.IMAGE_REGISTRY}/ecom-frontend:${env.IMAGE_TAG}
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Deploy') {
             when {
                 allOf {
@@ -187,10 +236,12 @@ pipeline {
                         set -e
 
                         mkdir -p "${DEPLOY_DIR}"
+                        test -f .release.env
 
                         rsync -a --delete \
                           --exclude '.git/' \
-                          --exclude '.jenkins-last-successful-deploy' \
+                          --exclude '.release.env' \
+                          --exclude '.last-successful-release.env' \
                           --exclude 'backend/docker.env' \
                           --exclude 'backend/certs/' \
                           --exclude 'backend/keys/' \
@@ -199,8 +250,12 @@ pipeline {
                           --exclude 'frontend/reports/' \
                           ./ "${DEPLOY_DIR}/"
 
+                        cp .release.env "${RELEASE_ENV_FILE}"
+
                         cd "${DEPLOY_DIR}"
-                        docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+
+                        docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml pull
+                        docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml up -d
                     """
 
                     deploySucceeded = true
@@ -255,7 +310,7 @@ pipeline {
                         exit 1
                     """
 
-                    sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
+                    sh """cp '${env.RELEASE_ENV_FILE}' '${env.LAST_SUCCESSFUL_RELEASE_FILE}'"""
                     healthCheckPassed = true
                 }
             }
@@ -265,7 +320,7 @@ pipeline {
     post {
         always {
             junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml,frontend/reports/junit/*.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: 'backend/**/target/site/jacoco/**,frontend/coverage/**'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'backend/**/target/site/jacoco/**,frontend/coverage/**,.release.env'
             echo 'Pipeline execution complete.'
         }
 
@@ -307,46 +362,22 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
             script {
                 if (deployAttempted) {
                     def rollbackFileExists = sh(
-                        script: "[ -f '${env.LAST_SUCCESSFUL_DEPLOY_FILE}' ]",
+                        script: "[ -f '${env.LAST_SUCCESSFUL_RELEASE_FILE}' ]",
                         returnStatus: true
                     ) == 0
 
                     if (rollbackFileExists) {
-                        def previousCommit = sh(
-                            script: "cat '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'",
-                            returnStdout: true
-                        ).trim()
+                        echo 'Rolling back to the last successful GHCR image release...'
+                        rollbackTriggered = true
 
-                        if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
-                            echo "Rolling back to previous successful commit ${previousCommit}..."
-                            rollbackTriggered = true
-
-                            sh "git checkout ${previousCommit}"
-
-                            sh """
-                                set -e
-
-                                mkdir -p "${DEPLOY_DIR}"
-
-                                rsync -a --delete \
-                                  --exclude '.git/' \
-                                  --exclude '.jenkins-last-successful-deploy' \
-                                  --exclude 'backend/docker.env' \
-                                  --exclude 'backend/certs/' \
-                                  --exclude 'backend/keys/' \
-                                  --exclude 'frontend/node_modules/' \
-                                  --exclude 'frontend/coverage/' \
-                                  --exclude 'frontend/reports/' \
-                                  ./ "${DEPLOY_DIR}/"
-
-                                cd "${DEPLOY_DIR}"
-                                docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
-                            """
-                        } else {
-                            echo 'Skipping rollback because there is no different previously successful deployed commit.'
-                        }
+                        sh """
+                            set -e
+                            cd "${DEPLOY_DIR}"
+                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml pull
+                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d
+                        """
                     } else {
-                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_DEPLOY_FILE} does not exist."
+                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_RELEASE_FILE} does not exist."
                     }
                 } else {
                     echo 'Skipping rollback because deployment was not attempted.'
