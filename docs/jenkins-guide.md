@@ -27,7 +27,7 @@ The Jenkins container has:
 
 - Docker CLI + Docker Compose plugin
 - Chromium for Angular/Karma tests
-- `rsync` for copying tested code into the deploy directory
+- `rsync` for copying the small deployment bundle into the deploy directory
 - Docker socket access so Jenkins can build, push, pull, and run Docker images
 
 ### Current Jenkins Container Design
@@ -262,8 +262,8 @@ Reference:
      ```bash
      ./scripts/ci/deploy-prod.sh
      ```
-   - copies the repo into the stable deploy directory with `rsync`
-   - preserves runtime-only secrets and certs
+   - copies `docker-compose.prod.yml`, `Makefile`, and `scripts/ci/` into the stable deploy directory
+   - leaves runtime-only secrets and certs untouched
    - deploys from `docker-compose.prod.yml` by pulling GHCR images
 
 10. `Health Check`

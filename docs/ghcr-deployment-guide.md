@@ -114,8 +114,8 @@ The values come from `.release.env`.
 The script `scripts/ci/deploy-prod.sh`:
 
 1. verifies `.release.env` exists
-2. copies the repository files to `/home/opc/ecom-platform-deploy`
-3. preserves runtime-only files that are not stored in Git
+2. copies only the deployment files to `/home/opc/ecom-platform-deploy`
+3. leaves runtime-only files that are not stored in Git untouched
 4. copies `.release.env` into the deploy directory
 5. pulls the GHCR images
 6. starts the stack with Docker Compose
@@ -126,6 +126,15 @@ Runtime-only files preserved on the VM:
 /home/opc/ecom-platform-deploy/backend/docker.env
 /home/opc/ecom-platform-deploy/backend/certs/
 /home/opc/ecom-platform-deploy/backend/keys/
+```
+
+Deployment files copied by Jenkins:
+
+```text
+/home/opc/ecom-platform-deploy/docker-compose.prod.yml
+/home/opc/ecom-platform-deploy/Makefile
+/home/opc/ecom-platform-deploy/scripts/ci/
+/home/opc/ecom-platform-deploy/.release.env
 ```
 
 Deploy command:

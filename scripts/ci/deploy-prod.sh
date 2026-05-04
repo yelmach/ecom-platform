@@ -6,18 +6,10 @@ set -eu
 
 test -f .release.env
 mkdir -p "$DEPLOY_DIR"
+mkdir -p "$DEPLOY_DIR/scripts/ci"
 
-rsync -a --delete \
-  --exclude '.git/' \
-  --exclude '.release.env' \
-  --exclude '.last-successful-release.env' \
-  --exclude 'backend/docker.env' \
-  --exclude 'backend/certs/' \
-  --exclude 'backend/keys/' \
-  --exclude 'frontend/node_modules/' \
-  --exclude 'frontend/coverage/' \
-  --exclude 'frontend/reports/' \
-  ./ "$DEPLOY_DIR/"
+rsync -a docker-compose.prod.yml Makefile "$DEPLOY_DIR/"
+rsync -a --delete scripts/ci/ "$DEPLOY_DIR/scripts/ci/"
 
 cp .release.env "$RELEASE_ENV_FILE"
 
