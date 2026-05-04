@@ -195,27 +195,7 @@ pipeline {
                     usernameVariable: 'GHCR_USER',
                     passwordVariable: 'GHCR_TOKEN'
                 )]) {
-                    sh '''
-                        set -e
-
-                        printf 'IMAGE_REGISTRY=%s\nIMAGE_TAG=%s\n' "$IMAGE_REGISTRY" "$IMAGE_TAG" > .release.env
-
-                        echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                    '''
-
-                    script {
-                        backendServices.each { service ->
-                            sh """
-                                docker build -t ${env.IMAGE_REGISTRY}/ecom-${service}:${env.IMAGE_TAG} backend/${service}
-                                docker push ${env.IMAGE_REGISTRY}/ecom-${service}:${env.IMAGE_TAG}
-                            """
-                        }
-
-                        sh """
-                            docker build -t ${env.IMAGE_REGISTRY}/ecom-frontend:${env.IMAGE_TAG} frontend
-                            docker push ${env.IMAGE_REGISTRY}/ecom-frontend:${env.IMAGE_TAG}
-                        """
-                    }
+                    sh './scripts/ci/build-push-images.sh'
                 }
             }
         }
@@ -232,31 +212,7 @@ pipeline {
                     currentStageName = 'Deploy'
                     deployAttempted = true
 
-                    sh """
-                        set -e
-
-                        mkdir -p "${DEPLOY_DIR}"
-                        test -f .release.env
-
-                        rsync -a --delete \
-                          --exclude '.git/' \
-                          --exclude '.release.env' \
-                          --exclude '.last-successful-release.env' \
-                          --exclude 'backend/docker.env' \
-                          --exclude 'backend/certs/' \
-                          --exclude 'backend/keys/' \
-                          --exclude 'frontend/node_modules/' \
-                          --exclude 'frontend/coverage/' \
-                          --exclude 'frontend/reports/' \
-                          ./ "${DEPLOY_DIR}/"
-
-                        cp .release.env "${RELEASE_ENV_FILE}"
-
-                        cd "${DEPLOY_DIR}"
-
-                        docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml pull
-                        docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml up -d
-                    """
+                    sh './scripts/ci/deploy-prod.sh'
 
                     deploySucceeded = true
                 }
@@ -273,43 +229,8 @@ pipeline {
             steps {
                 script {
                     currentStageName = 'Health Check'
-
-                    echo "Checking gateway on https://${params.DEPLOY_HOST}:8443/actuator/health"
-                    sh """
-                        set -e
-
-                        for attempt in \$(seq 1 6); do
-                          if curl -kfsS "https://${params.DEPLOY_HOST}:8443/actuator/health" | grep -q '"status":"UP"'; then
-                            echo "Gateway is healthy on attempt \${attempt}."
-                            exit 0
-                          fi
-
-                          echo "Gateway not ready yet (attempt \${attempt}/6). Waiting 5 seconds..."
-                          sleep 5
-                        done
-
-                        echo 'Gateway health check did not succeed in time.'
-                        exit 1
-                    """
-
-                    echo "Checking frontend on https://${params.DEPLOY_HOST}:4200"
-                    sh """
-                        set -e
-
-                        for attempt in \$(seq 1 6); do
-                          if curl -kfsS "https://${params.DEPLOY_HOST}:4200" > /dev/null; then
-                            echo "Frontend is reachable on attempt \${attempt}."
-                            exit 0
-                          fi
-
-                          echo "Frontend not ready yet (attempt \${attempt}/6). Waiting 5 seconds..."
-                          sleep 5
-                        done
-
-                        echo 'Frontend health check did not succeed in time.'
-                        exit 1
-                    """
-
+                    env.DEPLOY_HOST = params.DEPLOY_HOST
+                    sh './scripts/ci/health-check.sh'
                     sh """cp '${env.RELEASE_ENV_FILE}' '${env.LAST_SUCCESSFUL_RELEASE_FILE}'"""
                     healthCheckPassed = true
                 }
@@ -374,7 +295,7 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                             set -e
                             cd "${DEPLOY_DIR}"
                             docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml pull
-                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d
+                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d --remove-orphans
                         """
                     } else {
                         echo "Skipping rollback because ${env.LAST_SUCCESSFUL_RELEASE_FILE} does not exist."
