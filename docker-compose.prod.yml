@@ -1,0 +1,201 @@
+services:
+  # ----------------------------
+  # DATABASE (MongoDB)
+  # ----------------------------
+  mongo:
+    image: mongo:latest
+    container_name: ecom-mongo
+    ports:
+      - "${MONGO_PORT}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ecom_db
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # OBJECT STORAGE (MinIO)
+  # ----------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: ecom-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # SERVICE DISCOVERY (Eureka)
+  # ----------------------------
+  discovery-service:
+    image: ${IMAGE_REGISTRY}/ecom-discovery-service:${IMAGE_TAG}
+    container_name: ecom-discovery-service
+    env_file:
+      - ./backend/docker.env
+    ports:
+      - "${EUREKA_PORT}:${EUREKA_PORT}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${EUREKA_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # MEDIA SERVICE
+  # ----------------------------
+  media-service:
+    image: ${IMAGE_REGISTRY}/ecom-media-service:${IMAGE_TAG}
+    container_name: ecom-media-service
+    env_file:
+      - ./backend/docker.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${MEDIA_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # USER SERVICE
+  # ----------------------------
+  user-service:
+    image: ${IMAGE_REGISTRY}/ecom-user-service:${IMAGE_TAG}
+    container_name: ecom-user-service
+    env_file:
+      - ./backend/docker.env
+    volumes:
+      - ./backend/keys:/opt/keys:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # PRODUCT SERVICE
+  # ----------------------------
+  product-service:
+    image: ${IMAGE_REGISTRY}/ecom-product-service:${IMAGE_TAG}
+    container_name: ecom-product-service
+    env_file:
+      - ./backend/docker.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # API GATEWAY
+  # ----------------------------
+  gateway-service:
+    image: ${IMAGE_REGISTRY}/ecom-gateway-service:${IMAGE_TAG}
+    container_name: ecom-gateway-service
+    env_file:
+      - ./backend/docker.env
+    volumes:
+      - ./backend/keys:/opt/keys:ro
+      - ./backend/certs:/opt/certs:ro
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_PORT}:8443"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # FRONTEND (Angular + Nginx)
+  # ----------------------------
+  frontend:
+    image: ${IMAGE_REGISTRY}/ecom-frontend:${IMAGE_TAG}
+    container_name: ecom-frontend
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./backend/certs/gateway.crt:/etc/nginx/certs/gateway.crt:ro
+      - ./backend/certs/gateway.key:/etc/nginx/certs/gateway.key:ro
+    restart: unless-stopped
+    networks:
+      - ecom-network
+
+# ----------------------------
+# NETWORKS & VOLUMES
+# ----------------------------
+networks:
+  ecom-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  minio-data:

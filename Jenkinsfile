@@ -5,10 +5,13 @@ def backendServices = [
     'product-service',
     'media-service'
 ]
+
 def deployAttempted = false
 def deploySucceeded = false
 def healthCheckPassed = false
 def rollbackTriggered = false
+def sonarAnalysisAttempted = false
+def qualityGateStatus = 'NOT_RUN'
 def currentStageName = 'Not started'
 
 pipeline {
@@ -16,14 +19,19 @@ pipeline {
 
     parameters {
         booleanParam(
-            name: 'ENABLE_DEPLOY',
+            name: 'ENABLE_SONAR_ANALYSIS',
             defaultValue: true,
-            description: 'Run deployment and post-deploy health checks after a successful build'
+            description: 'Run SonarQube analysis and enforce the Quality Gate before deployment'
         )
         string(
             name: 'EMAIL_RECIPIENTS',
             defaultValue: '',
-            description: 'Comma-separated email recipients (example: dev1@company.com,dev2@company.com)'
+            description: 'Comma-separated email recipients'
+        )
+        string(
+            name: 'DEPLOY_HOST',
+            defaultValue: 'host.docker.internal',
+            description: 'Host used for post-deploy health checks, for example 129.x.x.x'
         )
     }
 
@@ -34,10 +42,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
-    triggers {
-        githubPush()
-    }
-
     tools {
         nodejs 'nodejs'
     }
@@ -45,21 +49,37 @@ pipeline {
     environment {
         CHROME_BIN = '/usr/bin/chromium'
         DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
-        LAST_SUCCESSFUL_DEPLOY_FILE = '/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy'
+        RELEASE_ENV_FILE = '/home/opc/ecom-platform-deploy/.release.env'
+        LAST_SUCCESSFUL_RELEASE_FILE = '/home/opc/ecom-platform-deploy/.last-successful-release.env'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                checkout scm
                 script {
                     currentStageName = 'Checkout Code'
+                }
+
+                checkout scm
+
+                script {
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
 
-                    echo "Detected commit: ${env.CURRENT_COMMIT}"
+                    env.CURRENT_SHORT_COMMIT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!params.ENABLE_SONAR_ANALYSIS) {
+                        qualityGateStatus = 'SKIPPED'
+                    }
+
+                    echo "Branch: ${env.BRANCH_NAME ?: env.CHANGE_BRANCH ?: 'unknown'}"
+                    echo "PR ID: ${env.CHANGE_ID ?: 'N/A'}"
+                    echo "Commit: ${env.CURRENT_COMMIT}"
                 }
             }
         }
@@ -68,8 +88,9 @@ pipeline {
             steps {
                 script {
                     currentStageName = 'Verify Backend'
+
                     backendServices.each { service ->
-                        echo "Building ${service}..."
+                        echo "Verifying ${service}..."
                         dir("backend/${service}") {
                             sh './mvnw -B -ntp clean verify'
                         }
@@ -83,6 +104,7 @@ pipeline {
                 script {
                     currentStageName = 'Install Frontend Dependencies'
                 }
+
                 dir('frontend') {
                     sh 'npm ci'
                 }
@@ -94,8 +116,8 @@ pipeline {
                 script {
                     currentStageName = 'Test Frontend'
                 }
+
                 dir('frontend') {
-                    echo 'Running Angular unit tests...'
                     sh 'npm run test:ci'
                 }
             }
@@ -106,95 +128,110 @@ pipeline {
                 script {
                     currentStageName = 'Build Frontend'
                 }
+
                 dir('frontend') {
-                    echo 'Building Angular app...'
                     sh 'npm run build'
                 }
             }
         }
 
+        stage('SonarQube Analysis') {
+            when {
+                expression { return params.ENABLE_SONAR_ANALYSIS }
+            }
+            steps {
+                script {
+                    currentStageName = 'SonarQube Analysis'
+                    sonarAnalysisAttempted = true
+
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+                        sh """
+                            "${scannerHome}/bin/sonar-scanner" \
+                              -Dsonar.projectVersion="${env.BUILD_NUMBER}" \
+                              -Dsonar.scm.revision="${env.CURRENT_COMMIT}"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            when {
+                expression { return params.ENABLE_SONAR_ANALYSIS }
+            }
+            steps {
+                script {
+                    currentStageName = 'Quality Gate'
+
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qualityGate = waitForQualityGate()
+                        qualityGateStatus = qualityGate.status
+
+                        if (qualityGate.status != 'OK') {
+                            error "Pipeline aborted because the SonarQube Quality Gate returned ${qualityGate.status}."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push Docker Images') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
+            steps {
+                script {
+                    currentStageName = 'Build and Push Docker Images'
+                    env.IMAGE_TAG = env.CURRENT_SHORT_COMMIT
+                    env.IMAGE_REGISTRY = 'ghcr.io/yelmach'
+                }
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh './scripts/ci/build-push-images.sh'
+                }
+            }
+        }
+
         stage('Deploy') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
             steps {
                 script {
                     currentStageName = 'Deploy'
-                    if (!params.ENABLE_DEPLOY) {
-                        echo 'Skipping deploy because ENABLE_DEPLOY is false.'
-                        return
-                    }
-
-                    echo 'Deploying application with Docker Compose...'
                     deployAttempted = true
-                    sh """
-                        set -e
 
-                        mkdir -p "${DEPLOY_DIR}"
+                    sh './scripts/ci/deploy-prod.sh'
 
-                        rsync -a --delete \
-                          --exclude '.git/' \
-                          --exclude '.jenkins-last-successful-deploy' \
-                          --exclude 'backend/docker.env' \
-                          --exclude 'backend/certs/' \
-                          --exclude 'backend/keys/' \
-                          --exclude 'frontend/node_modules/' \
-                          --exclude 'frontend/coverage/' \
-                          --exclude 'frontend/reports/' \
-                          ./ "${DEPLOY_DIR}/"
-
-                        cd "${DEPLOY_DIR}"
-                        docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
-                    """
                     deploySucceeded = true
                 }
             }
         }
 
         stage('Health Check') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { changeRequest() }
+                }
+            }
             steps {
                 script {
                     currentStageName = 'Health Check'
-                    if (!params.ENABLE_DEPLOY) {
-                        echo 'Skipping health check because ENABLE_DEPLOY is false.'
-                        return
-                    }
-
-                    echo 'Waiting for gateway health endpoint to become ready...'
-                    sh '''
-                        set -e
-
-                        for attempt in $(seq 1 6); do
-                          if curl -kfsS https://host.docker.internal:8443/actuator/health | grep -q '"status":"UP"'; then
-                            echo "Gateway is healthy on attempt ${attempt}."
-                            exit 0
-                          fi
-
-                          echo "Gateway not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
-                          sleep 5
-                        done
-
-                        echo 'Gateway health check did not succeed in time.'
-                        exit 1
-                    '''
-
-                    echo 'Waiting for frontend to become reachable...'
-                    sh '''
-                        set -e
-
-                        for attempt in $(seq 1 6); do
-                          if curl -kfsS https://host.docker.internal:4200 > /dev/null; then
-                            echo "Frontend is reachable on attempt ${attempt}."
-                            exit 0
-                          fi
-
-                          echo "Frontend not ready yet (attempt ${attempt}/6). Waiting 5 seconds..."
-                          sleep 5
-                        done
-
-                        echo 'Frontend health check did not succeed in time.'
-                        exit 1
-                    '''
-
-                    echo "Saving ${env.CURRENT_COMMIT} as the last successful deployed commit..."
-                    sh """printf '%s\\n' '${env.CURRENT_COMMIT}' > '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'"""
+                    env.DEPLOY_HOST = params.DEPLOY_HOST
+                    sh './scripts/ci/health-check.sh'
+                    sh """cp '${env.RELEASE_ENV_FILE}' '${env.LAST_SUCCESSFUL_RELEASE_FILE}'"""
                     healthCheckPassed = true
                 }
             }
@@ -204,11 +241,13 @@ pipeline {
     post {
         always {
             junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml,frontend/reports/junit/*.xml'
-            archiveArtifacts allowEmptyArchive: true, artifacts: 'frontend/coverage/**'
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'backend/**/target/site/jacoco/**,frontend/coverage/**,.release.env'
             echo 'Pipeline execution complete.'
         }
+
         success {
             echo 'Build and tests succeeded.'
+
             script {
                 if (!params.EMAIL_RECIPIENTS?.trim()) {
                     echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
@@ -222,8 +261,12 @@ pipeline {
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+PR ID: ${env.CHANGE_ID ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
-Deploy enabled: ${params.ENABLE_DEPLOY}
+SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
+SonarQube attempted: ${sonarAnalysisAttempted}
+Quality Gate: ${qualityGateStatus}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}
@@ -233,49 +276,29 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                 )
             }
         }
+
         failure {
             echo 'Pipeline failed. Check stage logs and published reports.'
+
             script {
                 if (deployAttempted) {
                     def rollbackFileExists = sh(
-                        script: "[ -f '${env.LAST_SUCCESSFUL_DEPLOY_FILE}' ]",
+                        script: "[ -f '${env.LAST_SUCCESSFUL_RELEASE_FILE}' ]",
                         returnStatus: true
                     ) == 0
 
                     if (rollbackFileExists) {
-                        def previousCommit = sh(
-                            script: "cat '${env.LAST_SUCCESSFUL_DEPLOY_FILE}'",
-                            returnStdout: true
-                        ).trim()
+                        echo 'Rolling back to the last successful GHCR image release...'
+                        rollbackTriggered = true
 
-                        if (previousCommit && previousCommit != env.CURRENT_COMMIT) {
-                            echo "Rolling back to previous successful commit ${previousCommit}..."
-                            rollbackTriggered = true
-                            sh "git checkout ${previousCommit}"
-                            sh """
-                                set -e
-
-                                mkdir -p "${DEPLOY_DIR}"
-
-                                rsync -a --delete \
-                                  --exclude '.git/' \
-                                  --exclude '.jenkins-last-successful-deploy' \
-                                  --exclude 'backend/docker.env' \
-                                  --exclude 'backend/certs/' \
-                                  --exclude 'backend/keys/' \
-                                  --exclude 'frontend/node_modules/' \
-                                  --exclude 'frontend/coverage/' \
-                                  --exclude 'frontend/reports/' \
-                                  ./ "${DEPLOY_DIR}/"
-
-                                cd "${DEPLOY_DIR}"
-                                docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
-                            """
-                        } else {
-                            echo 'Skipping rollback because there is no different previously successful deployed commit.'
-                        }
+                        sh """
+                            set -e
+                            cd "${DEPLOY_DIR}"
+                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml pull
+                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d --remove-orphans
+                        """
                     } else {
-                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_DEPLOY_FILE} does not exist."
+                        echo "Skipping rollback because ${env.LAST_SUCCESSFUL_RELEASE_FILE} does not exist."
                     }
                 } else {
                     echo 'Skipping rollback because deployment was not attempted.'
@@ -293,9 +316,13 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
 
 Job: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Branch: ${env.BRANCH_NAME ?: 'N/A'}
+PR ID: ${env.CHANGE_ID ?: 'N/A'}
 Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 Failed stage: ${currentStageName}
-Deploy enabled: ${params.ENABLE_DEPLOY}
+SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
+SonarQube attempted: ${sonarAnalysisAttempted}
+Quality Gate: ${qualityGateStatus}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}
