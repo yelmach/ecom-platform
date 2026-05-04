@@ -30,6 +30,7 @@ Frontend:
 - `docs/frontend-unit-testing-guide.md` (Jasmine/Karma frontend testing walkthrough)
 - `docs/jenkins-guide.md` (Jenkins setup + CI pipeline walkthrough)
 - `docs/sonarqube-guide.md` (SonarQube setup + Jenkins quality gate walkthrough)
+- `docs/ghcr-deployment-guide.md` (GHCR image deployment + rollback walkthrough)
 
 ## Config files
 

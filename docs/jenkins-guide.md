@@ -10,10 +10,12 @@ In this project, Jenkins does this flow:
 2. Run backend unit tests
 3. Run frontend unit tests
 4. Build the frontend
-5. Deploy the tested code the OCI VM
-6. Run post-deploy health checks
-7. Roll back to the previous successful commit if deployment health checks fail
-8. Publish test results and send notifications
+5. Run SonarQube analysis and wait for the Quality Gate
+6. On `main`, build Docker images and push them to GHCR
+7. On `main`, deploy the tested image tag to the OCI VM
+8. Run post-deploy health checks
+9. Roll back to the previous successful GHCR image release if deployment fails
+10. Publish test results and send notifications
 
 ## 2) Jenkins Container Setup
 
@@ -26,7 +28,7 @@ The Jenkins container has:
 - Docker CLI + Docker Compose plugin
 - Chromium for Angular/Karma tests
 - `rsync` for copying tested code into the deploy directory
-- Docker socket access so Jenkins can build and run the application stack
+- Docker socket access so Jenkins can build, push, pull, and run Docker images
 
 ### Current Jenkins Container Design
 
@@ -79,6 +81,7 @@ Then:
 - NodeJS
 - JUnit
 - Mailer
+- SonarQube Scanner
 
 ### Global Tool Configuration
 
@@ -115,7 +118,7 @@ Why:
 - Jenkins workspace is temporary
 - deploy directory is stable
 - secrets stay outside Git
-- rollback can redeploy a previously successful commit
+- rollback can redeploy a previously successful GHCR image release
 
 ### Required Deploy Directory Content
 
@@ -129,44 +132,53 @@ Before Jenkins deployment works, this directory must already contain the runtime
 
 These files are **not** copied from Git by Jenkins. They are preserved in the deploy directory.
 
+Jenkins also manages these release files in the deploy directory:
+
+```text
+/home/opc/ecom-platform-deploy/.release.env
+/home/opc/ecom-platform-deploy/.last-successful-release.env
+```
+
+`.release.env` stores the image tag for the current deployment.
+
+`.last-successful-release.env` stores the last deployment that passed health checks and is used for rollback.
+
 ## 6) Create The Jenkins Job
+
+Use a Multibranch Pipeline so Jenkins can validate pull requests and deploy only from `main`.
 
 1. Jenkins -> `New Item`
 2. Name it, for example:
-   - `ecom-platform-main`
-3. Type: `Pipeline`
-4. Configure:
-   - Definition: `Pipeline script from SCM`
-   - SCM: `Git`
-   - Repository URL: your repo URL
-   - Branch Specifier: the branch for this job
-   - Script Path: `Jenkinsfile`
-5. Save
+   - `ecom-platform`
+3. Type: `Multibranch Pipeline`
+4. Add a GitHub branch source for this repository
+5. Set the Jenkinsfile path:
+   - `Jenkinsfile`
+6. Recommended discovery behavior:
+   - discover branches: `Exclude branches that are also filed as PRs`
+   - discover pull requests from origin: merge the pull request with the current target branch revision
+   - discover pull requests from forks: only if you need fork PRs
+7. Save and scan the repository
 
+With this setup:
+
+- PRs run validation, tests, SonarQube, and Quality Gate
+- `main` runs validation, tests, SonarQube, Quality Gate, image publishing, deploy, and health checks
 
 ## 7) Webhook / Automatic Trigger
 
-This pipeline defines:
+For a Multibranch Pipeline, GitHub should notify Jenkins when branches or pull requests change.
 
-```groovy
-triggers {
-    githubPush()
-}
-```
+In GitHub repo settings, add a webhook:
 
-To make that work end-to-end:
+- Payload URL:
+  `http://<VM_PUBLIC_IP>:8080/github-webhook/`
+- Content type:
+  `application/json`
+- Events:
+  `Pushes` and `Pull requests`
 
-1. In Jenkins job config, enable:
-   - `GitHub hook trigger for GITScm polling`
-2. In GitHub repo settings, add webhook:
-   - Payload URL:
-     `http://<VM_PUBLIC_IP>:8080/github-webhook/`
-   - Content type:
-     `application/json`
-   - Event:
-     `Just the push event`
-
-Then a push should trigger Jenkins automatically.
+Then Jenkins can rescan and run the correct branch or PR job automatically.
 
 ## 8) Jenkinsfile Flow
 
@@ -176,11 +188,13 @@ Reference:
 
 ### Parameters
 
-- `ENABLE_DEPLOY`
-  - if `true`, run deploy + health checks
-  - if `false`, run CI only
+- `ENABLE_SONAR_ANALYSIS`
+  - if `true`, run SonarQube analysis and enforce the Quality Gate
+  - if `false`, skip SonarQube temporarily during troubleshooting
 - `EMAIL_RECIPIENTS`
   - comma-separated notification recipients
+- `DEPLOY_HOST`
+  - host used by post-deploy health checks, for example `host.docker.internal` or the VM public IP
 
 ### Environment
 
@@ -188,8 +202,10 @@ Reference:
   - used by frontend tests
 - `DEPLOY_DIR=/home/opc/ecom-platform-deploy`
   - stable deployment directory
-- `LAST_SUCCESSFUL_DEPLOY_FILE=/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy`
-  - stores last known good deployed commit
+- `RELEASE_ENV_FILE=/home/opc/ecom-platform-deploy/.release.env`
+  - stores the current image release values
+- `LAST_SUCCESSFUL_RELEASE_FILE=/home/opc/ecom-platform-deploy/.last-successful-release.env`
+  - stores the last image release that passed health checks
 
 ### Stages
 
@@ -222,26 +238,61 @@ Reference:
      npm run build
      ```
 
-6. `Deploy`
-   - runs only when `ENABLE_DEPLOY=true`
-   - copies the tested workspace into the stable deploy directory with `rsync`
-   - preserves:
-     - `backend/docker.env`
-     - `backend/certs/`
-     - `backend/keys/`
-     - `.jenkins-last-successful-deploy`
-   - deploys from the stable directory using:
-     ```bash
-     docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
-     ```
+6. `SonarQube Analysis`
+   - runs `sonar-scanner` from the repo root
+   - sends source, test, and coverage metadata to SonarQube
 
-7. `Health Check`
-   - runs only when `ENABLE_DEPLOY=true`
+7. `Quality Gate`
+   - waits for SonarQube to return the Quality Gate result
+   - fails the pipeline if the status is not `OK`
+
+8. `Build and Push Docker Images`
+   - runs only on `main`, not pull requests
+   - calls:
+     ```bash
+     ./scripts/ci/build-push-images.sh
+     ```
+   - builds backend and frontend images
+   - pushes them to GHCR
+   - writes `.release.env`
+
+9. `Deploy`
+   - runs only on `main`, not pull requests
+   - calls:
+     ```bash
+     ./scripts/ci/deploy-prod.sh
+     ```
+   - copies the repo into the stable deploy directory with `rsync`
+   - preserves runtime-only secrets and certs
+   - deploys from `docker-compose.prod.yml` by pulling GHCR images
+
+10. `Health Check`
+   - runs only on `main`, not pull requests
+   - calls:
+     ```bash
+     ./scripts/ci/health-check.sh
+     ```
    - checks:
      - gateway health endpoint
      - frontend availability
    - uses retries
-   - only if health checks pass, saves current commit as the last successful deployed commit
+   - only if health checks pass, saves `.release.env` as `.last-successful-release.env`
+
+### CI Scripts
+
+Long shell operations live in:
+
+```text
+scripts/ci/build-push-images.sh
+scripts/ci/deploy-prod.sh
+scripts/ci/health-check.sh
+```
+
+Keeping these scripts outside the Jenkinsfile makes the pipeline easier to read while still keeping Jenkins responsible for stages, credentials, branch rules, and notifications.
+
+For the full image deployment and rollback flow, see:
+
+- [GHCR Deployment Guide](ghcr-deployment-guide.md)
 
 ## 9) Why Health Checks Use `host.docker.internal`
 
@@ -272,17 +323,18 @@ So Jenkins can reach:
 
 ## 10) Rollback Strategy
 
-Rollback is a **basic commit-based rollback**.
+Rollback is image-based.
 
 How it works:
 
-1. a successful deployment writes the commit SHA into:
-   - `/home/opc/ecom-platform-deploy/.jenkins-last-successful-deploy`
-2. if a later deployment fails after deployment was attempted:
-   - Jenkins reads the previous successful commit
-   - checks out that commit in the workspace
-   - syncs it back into the deploy directory with `rsync`
-   - redeploys it with Docker Compose
+1. A successful deployment writes the release values into:
+   - `/home/opc/ecom-platform-deploy/.last-successful-release.env`
+2. If a later deployment fails after deployment was attempted:
+   - Jenkins runs `scripts/ci/rollback-prod.sh`
+   - Docker Compose reads `.last-successful-release.env`
+   - the VM pulls and starts the previous successful GHCR image tag
+
+This avoids rebuilding an old commit during rollback. The rollback target is the exact image release that already passed a previous health check.
 
 ## 11) Test Reports In Jenkins
 
@@ -334,7 +386,7 @@ Current notifications include:
 - job name
 - build number
 - commit SHA
-- deploy enabled
+- SonarQube enabled
 - deploy attempted
 - deploy succeeded
 - health check passed
@@ -370,9 +422,11 @@ Then either:
 2. Jenkins triggers automatically
 3. Backend tests pass
 4. Frontend tests pass
-5. Deploy runs
-6. Health check passes
-7. App is reachable in browser
+5. SonarQube Quality Gate passes
+6. Docker images are pushed to GHCR
+7. Deploy runs on `main`
+8. Health check passes
+9. App is reachable in browser
 
 ### CI Failure
 
@@ -388,3 +442,4 @@ Then either:
    - deploy runs
    - health check fails
    - rollback runs
+   - containers return to the image tag from `.last-successful-release.env`
