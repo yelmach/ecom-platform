@@ -47,10 +47,10 @@ pipeline {
     }
 
     environment {
-        CHROME_BIN = '/usr/bin/chromium'
-        DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
-        RELEASE_ENV_FILE = '/home/opc/ecom-platform-deploy/.release.env'
-        LAST_SUCCESSFUL_RELEASE_FILE = '/home/opc/ecom-platform-deploy/.last-successful-release.env'
+        // DEPLOY_DIR = (provided by Jenkins Global Config)
+        RELEASE_ENV_FILE = '${env.DEPLOY_DIR}/.release.env'
+        LAST_SUCCESSFUL_RELEASE_FILE = '${env.DEPLOY_DIR}/.last-successful-release.env'
+        IMAGE_REGISTRY = 'ghcr.io/yelmach'
     }
 
     stages {
@@ -188,7 +188,6 @@ pipeline {
                 script {
                     currentStageName = 'Build and Push Docker Images'
                     env.IMAGE_TAG = env.CURRENT_SHORT_COMMIT
-                    env.IMAGE_REGISTRY = 'ghcr.io/yelmach'
                 }
                 withCredentials([usernamePassword(
                     credentialsId: 'ghcr-credentials',
