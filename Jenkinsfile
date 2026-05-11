@@ -248,13 +248,15 @@ pipeline {
             echo 'Build and tests succeeded.'
 
             script {
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
+                def targetEmail = params.EMAIL_RECIPIENTS?.trim() ?: env.EMAIL_RECIPIENTS
+                
+                if (!targetEmail) {
+                    echo 'Skipping success email: No recipient provided.'
                     return
                 }
 
                 mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
+                    to: targetEmail,
                     subject: "[Jenkins] SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """Pipeline succeeded.
 
@@ -303,13 +305,15 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                     echo 'Skipping rollback because deployment was not attempted.'
                 }
 
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
+                def targetEmail = params.EMAIL_RECIPIENTS?.trim() ?: env.EMAIL_RECIPIENTS
+                
+                if (!targetEmail) {
+                    echo 'Skipping success email: No recipient provided.'
                     return
                 }
 
                 mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
+                    to: targetEmail,
                     subject: "[Jenkins] FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """Pipeline failed.
 
