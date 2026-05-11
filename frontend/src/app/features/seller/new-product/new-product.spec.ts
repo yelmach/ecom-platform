@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
@@ -70,7 +70,7 @@ describe('NewProduct Component', () => {
         { provide: MediaService, useValue: mediaServiceSpy },
         { provide: Router, useValue: routerSpy },
         { provide: ActivatedRoute, useValue: activatedRouteStub },
-        provideNoopAnimations(),
+        { provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' },
       ],
     }).compileComponents();
   });
@@ -117,10 +117,10 @@ describe('NewProduct Component', () => {
 
       it('should reject invalid file types and sizes', () => {
         const textFile = new File([''], 'test.txt', { type: 'text/plain' });
-        
+
         // Artificially create a large file
         const largeFile = new File([''], 'large.jpg', { type: 'image/jpeg' });
-        Object.defineProperty(largeFile, 'size', { value: 3 * 1024 * 1024 }); 
+        Object.defineProperty(largeFile, 'size', { value: 3 * 1024 * 1024 });
 
         const event = { target: { files: [textFile, largeFile] } } as unknown as Event;
         component.onFileSelected(event);
@@ -142,7 +142,7 @@ describe('NewProduct Component', () => {
       it('should remove an image by index', () => {
         const file = new File([''], 'test.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [file] } } as unknown as Event);
-        
+
         expect(component.images().length).toBe(1);
         component.removeImage(0);
         expect(component.images().length).toBe(0);
@@ -220,7 +220,7 @@ describe('NewProduct Component', () => {
     beforeEach(() => {
       // Setup the route stub to return an ID, simulating an edit route
       activatedRouteStub.snapshot.paramMap.get.and.returnValue('prod-123');
-      
+
       // Setup mock returns for the initialization calls
       productServiceSpy.getSingleProduct.and.returnValue(of(mockProduct));
       mediaServiceSpy.getProductImages.and.returnValue(of(mockImagesResponse));
@@ -269,7 +269,7 @@ describe('NewProduct Component', () => {
       it('should enable submit button if a new image is added', () => {
         const mockFile = new File([''], 'new.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [mockFile] } } as unknown as Event);
-        
+
         expect(component.isSubmitDisabled()).toBeFalse();
       });
     });
@@ -278,14 +278,14 @@ describe('NewProduct Component', () => {
       it('should submit updates without new images', () => {
         // Make a change to enable the submit button
         component.productForm.patchValue({ name: 'Updated Product' });
-        
+
         productServiceSpy.updateProduct.and.returnValue(of(mockProduct));
 
         component.onSubmit();
 
         // Should not upload images since none were added
         expect(mediaServiceSpy.uploadProductImages).not.toHaveBeenCalled();
-        
+
         // Should update product with existing mediaIds preserved
         expect(productServiceSpy.updateProduct).toHaveBeenCalledWith('prod-123', {
           name: 'Updated Product',
@@ -300,7 +300,7 @@ describe('NewProduct Component', () => {
         // Add a new image
         const newFile = new File([''], 'new.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [newFile] } } as unknown as Event);
-        
+
         const newImagesResponse: ProductImagesResponse = {
           productId: 'prod-123',
           images: [{ id: 'media-2', url: 'http://example.com/new.jpg' }]
@@ -320,7 +320,7 @@ describe('NewProduct Component', () => {
           description: 'A great product',
           price: 99.99,
           quantity: 10,
-          mediaIds: ['media-1', 'media-2'] 
+          mediaIds: ['media-1', 'media-2']
         });
       });
     });

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
 
@@ -59,7 +59,7 @@ describe('ProductList Component', () => {
                 { provide: ProductService, useValue: productServiceSpy },
                 { provide: MediaService, useValue: mediaServiceSpy },
                 { provide: MatDialog, useValue: dialogSpy },
-                provideNoopAnimations(),
+                { provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' },
             ],
         }).compileComponents();
 

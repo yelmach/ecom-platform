@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
@@ -66,7 +66,7 @@ describe('Dashboard Component', () => {
                 { provide: MediaService, useValue: mediaServiceSpy },
                 { provide: Router, useValue: routerSpy },
                 { provide: MatDialog, useValue: dialogSpy },
-                provideNoopAnimations(),
+                { provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' },
             ],
         }).compileComponents();
 
