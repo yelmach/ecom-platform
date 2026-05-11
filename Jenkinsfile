@@ -48,8 +48,8 @@ pipeline {
 
     environment {
         // DEPLOY_DIR = (provided by Jenkins Global Config)
-        RELEASE_ENV_FILE = '${env.DEPLOY_DIR}/.release.env'
-        LAST_SUCCESSFUL_RELEASE_FILE = '${env.DEPLOY_DIR}/.last-successful-release.env'
+        RELEASE_ENV_FILE = "${env.DEPLOY_DIR}/.release.env"
+        LAST_SUCCESSFUL_RELEASE_FILE = "${env.DEPLOY_DIR}/.last-successful-release.env"
         IMAGE_REGISTRY = 'ghcr.io/yelmach'
     }
 
