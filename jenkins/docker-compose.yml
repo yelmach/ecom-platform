@@ -2,7 +2,8 @@ services:
   jenkins:
     build: .
     container_name: jenkins-server
-    user: root # Runs as root to allow Docker operations inside Jenkins
+    group_add:
+      - "990"
     ports:
       - "8080:8080" # Web UI port
       - "50000:50000" # Build agent port

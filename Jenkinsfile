@@ -47,10 +47,10 @@ pipeline {
     }
 
     environment {
-        CHROME_BIN = '/usr/bin/chromium'
-        DEPLOY_DIR = '/home/opc/ecom-platform-deploy'
-        RELEASE_ENV_FILE = '/home/opc/ecom-platform-deploy/.release.env'
-        LAST_SUCCESSFUL_RELEASE_FILE = '/home/opc/ecom-platform-deploy/.last-successful-release.env'
+        // DEPLOY_DIR = (provided by Jenkins Global Config)
+        RELEASE_ENV_FILE = '${env.DEPLOY_DIR}/.release.env'
+        LAST_SUCCESSFUL_RELEASE_FILE = '${env.DEPLOY_DIR}/.last-successful-release.env'
+        IMAGE_REGISTRY = 'ghcr.io/yelmach'
     }
 
     stages {
@@ -188,7 +188,6 @@ pipeline {
                 script {
                     currentStageName = 'Build and Push Docker Images'
                     env.IMAGE_TAG = env.CURRENT_SHORT_COMMIT
-                    env.IMAGE_REGISTRY = 'ghcr.io/yelmach'
                 }
                 withCredentials([usernamePassword(
                     credentialsId: 'ghcr-credentials',
@@ -249,13 +248,15 @@ pipeline {
             echo 'Build and tests succeeded.'
 
             script {
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping success email: EMAIL_RECIPIENTS parameter is empty.'
+                def targetEmail = params.EMAIL_RECIPIENTS?.trim() ?: env.EMAIL_RECIPIENTS
+                
+                if (!targetEmail) {
+                    echo 'Skipping success email: No recipient provided.'
                     return
                 }
 
                 mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
+                    to: targetEmail,
                     subject: "[Jenkins] SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """Pipeline succeeded.
 
@@ -304,13 +305,15 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                     echo 'Skipping rollback because deployment was not attempted.'
                 }
 
-                if (!params.EMAIL_RECIPIENTS?.trim()) {
-                    echo 'Skipping failure email: EMAIL_RECIPIENTS parameter is empty.'
+                def targetEmail = params.EMAIL_RECIPIENTS?.trim() ?: env.EMAIL_RECIPIENTS
+                
+                if (!targetEmail) {
+                    echo 'Skipping success email: No recipient provided.'
                     return
                 }
 
                 mail(
-                    to: params.EMAIL_RECIPIENTS.trim(),
+                    to: targetEmail,
                     subject: "[Jenkins] FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """Pipeline failed.
 
