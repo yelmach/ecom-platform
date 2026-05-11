@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router, provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
@@ -43,7 +43,7 @@ describe('Register Component', () => {
         { provide: MediaService, useValue: mediaServiceSpy },
         { provide: UserService, useValue: userServiceSpy },
         provideRouter([]),
-        provideNoopAnimations(),
+        { provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' },
       ],
     }).compileComponents();
 
@@ -67,7 +67,7 @@ describe('Register Component', () => {
 
     it('should validate username constraints', () => {
       const usernameControl = component.registerForm.controls.username;
-      
+
       usernameControl.setValue('a'); // too short
       expect(usernameControl.hasError('minlength')).toBeTrue();
 
@@ -83,7 +83,7 @@ describe('Register Component', () => {
 
     it('should validate email and password as required', () => {
       const { email, password } = component.registerForm.controls;
-      
+
       email.setValue('not-an-email');
       expect(email.hasError('email')).toBeTrue();
 
@@ -107,7 +107,7 @@ describe('Register Component', () => {
     it('should correctly format frontend error messages', () => {
       const usernameControl = component.registerForm.controls.username;
       usernameControl.markAsTouched();
-      
+
       usernameControl.setValue('');
       expect(component.getErrorMessage('username')).toBe('username is required');
 
@@ -124,7 +124,7 @@ describe('Register Component', () => {
     it('should reject non-image files', () => {
       const mockEvent = { target: { files: [new File([''], 'test.txt', { type: 'text/plain' })] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
-      
+
       expect(component.submitError()).toBe('Avatar must be an image file.');
       expect(component.avatarPreview()).toBeNull();
     });
@@ -132,9 +132,9 @@ describe('Register Component', () => {
     it('should reject files larger than 2MB', () => {
       // Create a dummy file artificially reporting > 2MB size
       const mockFile = new File([''], 'large.jpg', { type: 'image/jpeg' });
-      Object.defineProperty(mockFile, 'size', { value: 3 * 1024 * 1024 }); 
+      Object.defineProperty(mockFile, 'size', { value: 3 * 1024 * 1024 });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
-      
+
       component.onAvatarSelected(mockEvent);
       expect(component.submitError()).toBe('Avatar must be 2 MB or less.');
     });
@@ -142,7 +142,7 @@ describe('Register Component', () => {
     it('should accept valid images and create a preview', () => {
       const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
-      
+
       component.onAvatarSelected(mockEvent);
       expect(component.submitError()).toBe('');
       expect(component.avatarPreview()).toBe('blob:mock-url');
@@ -172,7 +172,7 @@ describe('Register Component', () => {
       authServiceSpy.register.and.returnValue(of(mockUser));
       component.registerForm.setValue({ ...validFormData, username: '  TestUser  ' });
       component.onSubmit();
-      
+
       // Check if it trimmed the value successfully
       expect(component.registerForm.value.username).toBe('TestUser');
     });
@@ -180,7 +180,7 @@ describe('Register Component', () => {
     it('should submit successfully without avatar and navigate to /shop for CLIENT', () => {
       authServiceSpy.register.and.returnValue(of(mockUser));
       component.registerForm.setValue(validFormData);
-      
+
       component.onSubmit();
 
       expect(component.isSubmitting()).toBeFalse();
@@ -192,18 +192,18 @@ describe('Register Component', () => {
     it('should submit successfully with avatar and navigate to /seller for SELLER', () => {
       const sellerUser = { ...mockUser, role: 'SELLER' } as User;
       const mockProfileImage = { avatar: { id: 'media-123', url: '' } } as ProfileImageResponse;
-      
+
       authServiceSpy.register.and.returnValue(of(sellerUser));
       mediaServiceSpy.uploadProfile.and.returnValue(of(mockProfileImage));
       userServiceSpy.updateProfile.and.returnValue(of(sellerUser));
 
       component.registerForm.setValue({ ...validFormData, role: 'SELLER' });
-      
+
       // Simulate setting an avatar
       const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
-      
+
       component.onSubmit();
 
       expect(authServiceSpy.register).toHaveBeenCalled();
@@ -217,11 +217,11 @@ describe('Register Component', () => {
       mediaServiceSpy.uploadProfile.and.returnValue(throwError(() => new Error('Upload Failed')));
 
       component.registerForm.setValue(validFormData);
-      
+
       const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
-      
+
       component.onSubmit();
 
       expect(component.avatarUploadWarning()).toContain('avatar upload failed');

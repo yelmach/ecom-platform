@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed, fakeAsync, flush } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { signal } from '@angular/core';
@@ -63,7 +63,7 @@ describe('ProfileDialog Component', () => {
                 { provide: MediaService, useValue: mediaServiceSpy },
                 { provide: MatDialogRef, useValue: dialogRefSpy },
                 { provide: MAT_DIALOG_DATA, useFactory: () => dialogData },
-                provideNoopAnimations(),
+                { provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' },
             ],
         }).compileComponents();
     });
