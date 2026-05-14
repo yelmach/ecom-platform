@@ -66,3 +66,6 @@ Your mission is to configure **SonarQube**, connect it to your GitHub repository
 - Link SonarQube with your **CI/CD pipeline** for build-time analysis
 - The pipeline must **fail** if quality gates are not met
 - Maintain a visible dashboard of key quality metrics
+
+sdsdsd
+dsfdsfds
