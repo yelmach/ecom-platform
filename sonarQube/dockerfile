@@ -1,0 +1,40 @@
+# ==========================================
+# STAGE 1: Download and Extract Workspace
+# ==========================================
+FROM alpine:latest AS builder
+
+ARG PLUGIN_VERSION=26.4.0
+WORKDIR /tmp
+
+# Install full-featured curl and unzip
+RUN apk add --no-cache curl unzip
+
+# Use curl -L to follow GitHub's secure redirects to AWS S3
+RUN curl -L -o sonarqube-community-branch-plugin.jar https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-community-branch-plugin-${PLUGIN_VERSION}.jar
+
+# Download and extract the frontend UI
+RUN curl -L -o sonarqube-webapp.zip https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-webapp.zip \
+    && unzip -o sonarqube-webapp.zip -d /tmp/web \
+    && rm sonarqube-webapp.zip
+# ==========================================
+# STAGE 2: Build SonarQube Image
+# ==========================================
+FROM sonarqube:community
+
+USER root
+
+# Copy the prepared plugin jar from the builder stage
+COPY --from=builder /tmp/sonarqube-community-branch-plugin.jar /opt/sonarqube/extensions/plugins/
+
+# Copy the extracted web folder from the builder stage, overwriting the defaults
+COPY --from=builder /tmp/web/ /opt/sonarqube/web/
+
+# Ensure the sonarqube user owns these files for secure execution
+RUN chown -R sonarqube /opt/sonarqube/extensions/plugins/ \
+    && chown -R sonarqube /opt/sonarqube/web/
+
+# Add these Java configuration properties
+RUN echo "sonar.web.javaAdditionalOpts=-javaagent:/opt/sonarqube/extensions/plugins/sonarqube-community-branch-plugin.jar=web" >> /opt/sonarqube/conf/sonar.properties \
+    && echo "sonar.ce.javaAdditionalOpts=-javaagent:/opt/sonarqube/extensions/plugins/sonarqube-community-branch-plugin.jar=ce" >> /opt/sonarqube/conf/sonar.properties
+
+USER sonarqube
