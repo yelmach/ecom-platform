@@ -20,7 +20,7 @@ services:
       - sonarqube-network
 
   sonarqube:
-    image: sonarqube:community
+    build: .
     container_name: sonarqube-server
     depends_on:
       postgres:
