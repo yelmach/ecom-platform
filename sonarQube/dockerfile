@@ -1,19 +1,21 @@
 # ==========================================
-# STAGE 1: Download and Extract Plugins
+# STAGE 1: Download and Extract Workspace
 # ==========================================
-FROM busybox:1.37 AS builder
+FROM alpine:latest AS builder
 
 ARG PLUGIN_VERSION=26.4.0
 WORKDIR /tmp
 
-# Download the .jar plugin
-RUN wget -O sonarqube-community-branch-plugin.jar https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-community-branch-plugin-${PLUGIN_VERSION}.jar
+# Install full-featured curl and unzip
+RUN apk add --no-cache curl unzip
 
-# Download and extract the patched frontend UI
-RUN wget -O sonarqube-webapp.zip https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-webapp.zip \
+# Use curl -L to follow GitHub's secure redirects to AWS S3
+RUN curl -L -o sonarqube-community-branch-plugin.jar https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-community-branch-plugin-${PLUGIN_VERSION}.jar
+
+# Download and extract the frontend UI
+RUN curl -L -o sonarqube-webapp.zip https://github.com/mc1arke/sonarqube-community-branch-plugin/releases/download/${PLUGIN_VERSION}/sonarqube-webapp.zip \
     && unzip -o sonarqube-webapp.zip -d /tmp/web \
     && rm sonarqube-webapp.zip
-
 # ==========================================
 # STAGE 2: Build SonarQube Image
 # ==========================================
@@ -35,5 +37,4 @@ RUN chown -R sonarqube /opt/sonarqube/extensions/plugins/ \
 RUN echo "sonar.web.javaAdditionalOpts=-javaagent:/opt/sonarqube/extensions/plugins/sonarqube-community-branch-plugin.jar=web" >> /opt/sonarqube/conf/sonar.properties \
     && echo "sonar.ce.javaAdditionalOpts=-javaagent:/opt/sonarqube/extensions/plugins/sonarqube-community-branch-plugin.jar=ce" >> /opt/sonarqube/conf/sonar.properties
 
-# Switch back to the secure non-root user
 USER sonarqube
