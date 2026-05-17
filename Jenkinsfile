@@ -146,11 +146,23 @@ pipeline {
 
                     def scannerHome = tool 'sonar-scanner'
 
+                    // check if this is a Pull Request or a standard branch build
+                    def isPR = env.CHANGE_ID != null
+                    def sonarParams = "-Dsonar.projectVersion=\"${env.BUILD_NUMBER}\" -Dsonar.scm.revision=\"${env.CURRENT_COMMIT}\""
+
+                    if (isPR) {
+                        // Use the PR-specific arguments
+                        sonarParams += " -Dsonar.pullrequest.key=${env.CHANGE_ID}"
+                        sonarParams += " -Dsonar.pullrequest.branch=${env.CHANGE_BRANCH}"
+                        sonarParams += " -Dsonar.pullrequest.base=${env.CHANGE_TARGET}"
+                    } else {
+                        def branchName = env.BRANCH_NAME ?: 'main'
+                        sonarParams += " -Dsonar.branch.name=${branchName}"
+                    }
+
                     withSonarQubeEnv('sonarqube') {
                         sh """
-                            "${scannerHome}/bin/sonar-scanner" \
-                              -Dsonar.projectVersion="${env.BUILD_NUMBER}" \
-                              -Dsonar.scm.revision="${env.CURRENT_COMMIT}"
+                            "${scannerHome}/bin/sonar-scanner" ${sonarParams}
                         """
                     }
                 }
