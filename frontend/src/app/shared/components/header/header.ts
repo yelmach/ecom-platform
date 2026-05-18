@@ -15,9 +15,9 @@ import { MediaService } from '../../../core/services/media.service';
   styleUrl: './header.scss',
 })
 export class Header {
-  private authService = inject(AuthService);
-  private dialog = inject(MatDialog);
-  private mediaService = inject(MediaService);
+  private readonly authService = inject(AuthService);
+  private readonly dialog = inject(MatDialog);
+  private readonly mediaService = inject(MediaService);
 
   currentUser = this.authService.currentUser;
   isAuthenticated = this.authService.isAuthenticated;

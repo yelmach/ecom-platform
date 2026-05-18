@@ -7,7 +7,7 @@ import { UpdateUserRequest, User } from '../models/user';
   providedIn: 'root',
 })
 export class UserService {
-  private http = inject(HttpClient);
+  private readonly http = inject(HttpClient);
 
   updateProfile(payload: UpdateUserRequest): Observable<User> {
     return this.http.patch<User>('/users/me', payload);

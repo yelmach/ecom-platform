@@ -18,9 +18,9 @@ import { InfiniteScrollDirective } from '../../../shared/directives/infinite-scr
   styleUrl: './product-list.scss',
 })
 export class ProductList implements OnInit {
-  private productService = inject(ProductService);
-  private mediaService = inject(MediaService);
-  private dialog = inject(MatDialog);
+  private readonly productService = inject(ProductService);
+  private readonly mediaService = inject(MediaService);
+  private readonly dialog = inject(MatDialog);
 
   products = signal<Product[]>([]);
   currentPage = signal(0);

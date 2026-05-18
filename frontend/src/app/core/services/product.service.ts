@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
   providedIn: 'root',
 })
 export class ProductService {
-  private http = inject(HttpClient);
+  private readonly http = inject(HttpClient);
 
   getAllProduct(page = 0, size = 10): Observable<Page<Product>> {
     const params = new HttpParams().set('page', page).set('size', size);

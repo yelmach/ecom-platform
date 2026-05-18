@@ -7,7 +7,7 @@ import { MediaImage, ProductImagesResponse, ProfileImageResponse } from '../mode
   providedIn: 'root',
 })
 export class MediaService {
-  private http = inject(HttpClient);
+  private readonly http = inject(HttpClient);
 
   uploadProfile(file: File): Observable<ProfileImageResponse> {
     const formData = new FormData();
