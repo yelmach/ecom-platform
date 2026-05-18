@@ -11,11 +11,16 @@ def deploySucceeded = false
 def healthCheckPassed = false
 def rollbackTriggered = false
 def sonarAnalysisAttempted = false
+def scheduledScan = false
 def qualityGateStatus = 'NOT_RUN'
 def currentStageName = 'Not started'
 
 pipeline {
     agent any
+
+    triggers {
+        cron('H 12 * * 2')
+    }
 
     parameters {
         booleanParam(
@@ -63,6 +68,9 @@ pipeline {
                 checkout scm
 
                 script {
+                    scheduledScan = !currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause').isEmpty()
+                    env.IS_SCHEDULED_SCAN = scheduledScan.toString()
+
                     env.CURRENT_COMMIT = sh(
                         script: 'git rev-parse HEAD',
                         returnStdout: true
@@ -73,10 +81,11 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    if (!params.ENABLE_SONAR_ANALYSIS) {
+                    if (!params.ENABLE_SONAR_ANALYSIS && !scheduledScan) {
                         qualityGateStatus = 'SKIPPED'
                     }
 
+                    echo "Scheduled scan: ${scheduledScan}"
                     echo "Branch: ${env.BRANCH_NAME ?: env.CHANGE_BRANCH ?: 'unknown'}"
                     echo "PR ID: ${env.CHANGE_ID ?: 'N/A'}"
                     echo "Commit: ${env.CURRENT_COMMIT}"
@@ -137,7 +146,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             when {
-                expression { return params.ENABLE_SONAR_ANALYSIS }
+                expression { return params.ENABLE_SONAR_ANALYSIS || scheduledScan }
             }
             steps {
                 script {
@@ -171,7 +180,7 @@ pipeline {
 
         stage('Quality Gate') {
             when {
-                expression { return params.ENABLE_SONAR_ANALYSIS }
+                expression { return params.ENABLE_SONAR_ANALYSIS || scheduledScan }
             }
             steps {
                 script {
@@ -194,6 +203,7 @@ pipeline {
                 allOf {
                     branch 'main'
                     not { changeRequest() }
+                    expression { return !scheduledScan }
                 }
             }
             steps {
@@ -216,6 +226,7 @@ pipeline {
                 allOf {
                     branch 'main'
                     not { changeRequest() }
+                    expression { return !scheduledScan }
                 }
             }
             steps {
@@ -235,6 +246,7 @@ pipeline {
                 allOf {
                     branch 'main'
                     not { changeRequest() }
+                    expression { return !scheduledScan }
                 }
             }
             steps {
@@ -280,6 +292,7 @@ Commit: ${env.CURRENT_COMMIT ?: 'N/A'}
 SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
 SonarQube attempted: ${sonarAnalysisAttempted}
 Quality Gate: ${qualityGateStatus}
+Scheduled scan: ${scheduledScan}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}
@@ -338,6 +351,7 @@ Failed stage: ${currentStageName}
 SonarQube enabled: ${params.ENABLE_SONAR_ANALYSIS}
 SonarQube attempted: ${sonarAnalysisAttempted}
 Quality Gate: ${qualityGateStatus}
+Scheduled scan: ${scheduledScan}
 Deploy attempted: ${deployAttempted}
 Deploy succeeded: ${deploySucceeded}
 Health check passed: ${healthCheckPassed}

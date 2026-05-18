@@ -28,10 +28,10 @@ import { InfiniteScrollDirective } from '../../../shared/directives/infinite-scr
   styleUrl: './dashboard.scss',
 })
 export class Dashboard implements OnInit {
-  private productService = inject(ProductService);
-  private mediaService = inject(MediaService);
-  private router = inject(Router);
-  private dialog = inject(MatDialog);
+  private readonly productService = inject(ProductService);
+  private readonly mediaService = inject(MediaService);
+  private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   products = signal<Product[]>([]);
   productImageUrls = signal<Record<string, string>>({});

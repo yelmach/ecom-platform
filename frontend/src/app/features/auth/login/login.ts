@@ -24,8 +24,8 @@ import { AuthService } from '../../../core/services/auth.service';
   styleUrl: './login.scss',
 })
 export class Login {
-  private authService = inject(AuthService);
-  private router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
   readonly hidePassword = signal(true);
   readonly isSubmitting = signal(false);

@@ -28,10 +28,10 @@ import { UserService } from '../../../core/services/user.service';
   styleUrl: './register.scss',
 })
 export class Register {
-  private authService = inject(AuthService);
-  private mediaService = inject(MediaService);
-  private userService = inject(UserService);
-  private router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly mediaService = inject(MediaService);
+  private readonly userService = inject(UserService);
+  private readonly router = inject(Router);
 
   readonly registerForm = new FormGroup({
     role: new FormControl<UserRole>('CLIENT', { nonNullable: true }),

@@ -27,18 +27,18 @@ import { MediaService } from '../../../core/services/media.service';
   templateUrl: './user-profile.html',
   styleUrl: './user-profile.scss',
 })
-export class ProfileDialog {
-  private userService = inject(UserService);
-  private authService = inject(AuthService);
-  private mediaService = inject(MediaService);
-  private dialogRef = inject(MatDialogRef<ProfileDialog>);
+export class ProfileDialog implements OnInit {
+  private readonly userService = inject(UserService);
+  private readonly authService = inject(AuthService);
+  private readonly mediaService = inject(MediaService);
+  private readonly dialogRef = inject(MatDialogRef<ProfileDialog>);
 
   user: User = inject(MAT_DIALOG_DATA);
 
   readonly isSubmitting = signal(false);
   readonly submitError = signal('');
   readonly fieldErrors = signal<{ [key: string]: string }>({});
-  readonly hidePassword = signal(true); 
+  readonly hidePassword = signal(true);
   readonly avatarPreview = signal<string | null>(null);
   readonly avatarRemoved = signal(false);
   private avatarFile: File | null = null;

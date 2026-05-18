@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, OnInit } from '@angular/core';
 import { CurrencyPipe } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogClose } from '@angular/material/dialog';
 import { MatIconButton } from '@angular/material/button';
@@ -12,10 +12,10 @@ import { MediaService } from '../../../core/services/media.service';
   templateUrl: './product-details.html',
   styleUrl: './product-details.scss',
 })
-export class ProductDetails {
+export class ProductDetails implements OnInit {
   private static readonly SWIPE_THRESHOLD_PX = 40;
 
-  private mediaService = inject(MediaService);
+  private readonly mediaService = inject(MediaService);
 
   product: Product = inject(MAT_DIALOG_DATA);
   readonly placeholderUrl = `https://placehold.co/400x280/222/666?text=${this.product.name}`;
@@ -41,7 +41,7 @@ export class ProductDetails {
           this.activeImageIndex.set(0);
         }
       },
-      error: () => {},
+      error: () => { },
     });
   }
 

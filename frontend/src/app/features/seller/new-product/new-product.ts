@@ -24,10 +24,10 @@ interface ImagePreview {
   styleUrl: './new-product.scss',
 })
 export class NewProduct implements OnInit {
-  private productService = inject(ProductService);
-  private mediaService = inject(MediaService);
-  private router = inject(Router);
-  private route = inject(ActivatedRoute);
+  private readonly productService = inject(ProductService);
+  private readonly mediaService = inject(MediaService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly isEditMode = signal(false);
   private editProductId = '';
