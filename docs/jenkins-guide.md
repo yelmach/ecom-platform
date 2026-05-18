@@ -164,6 +164,7 @@ With this setup:
 
 - PRs run validation, tests, SonarQube, and Quality Gate
 - `main` runs validation, tests, SonarQube, Quality Gate, image publishing, deploy, and health checks
+- scheduled weekday scans run validation, tests, SonarQube, and Quality Gate without publishing images or deploying
 
 ## 7) Webhook / Automatic Trigger
 
@@ -180,7 +181,21 @@ In GitHub repo settings, add a webhook:
 
 Then Jenkins can rescan and run the correct branch or PR job automatically.
 
-## 8) Jenkinsfile Flow
+## 8) Scheduled SonarQube Scans
+
+The Jenkinsfile includes a weekday cron trigger:
+
+```groovy
+triggers {
+    cron('H H(2-4) * * 1-5')
+}
+```
+
+Jenkins chooses a stable hashed time between 02:00 and 04:59 from Monday to Friday. These scheduled runs continuously refresh the SonarQube dashboard even when nobody pushes code.
+
+Timer-triggered builds are treated as quality-monitoring runs. They still execute tests, coverage generation, SonarQube analysis, and the Quality Gate, but they skip image publishing, deployment, and health checks.
+
+## 9) Jenkinsfile Flow
 
 Reference:
 
@@ -294,7 +309,7 @@ For the full image deployment and rollback flow, see:
 
 - [GHCR Deployment Guide](ghcr-deployment-guide.md)
 
-## 9) Why Health Checks Use `host.docker.internal`
+## 10) Why Health Checks Use `host.docker.internal`
 
 Health checks run inside the Jenkins container.
 
@@ -321,7 +336,7 @@ So Jenkins can reach:
 - `https://host.docker.internal:8443/actuator/health`
 - `https://host.docker.internal:4200`
 
-## 10) Rollback Strategy
+## 11) Rollback Strategy
 
 Rollback is image-based.
 
@@ -336,7 +351,7 @@ How it works:
 
 This avoids rebuilding an old commit during rollback. The rollback target is the exact image release that already passed a previous health check.
 
-## 11) Test Reports In Jenkins
+## 12) Test Reports In Jenkins
 
 ### Backend
 
@@ -374,7 +389,7 @@ After a build:
 - `Test Result` for backend + frontend JUnit reports
 - `Artifacts` for frontend coverage
 
-## 12) Notifications
+## 13) Notifications
 
 The pipeline sends emails on:
 
@@ -414,7 +429,7 @@ Then either:
 - set a default value for `EMAIL_RECIPIENTS` in the job configuration
 - or fill it during `Build with Parameters`
 
-## 13) How To Validate The Pipeline
+## 14) How To Validate The Pipeline
 
 ### Happy Path
 

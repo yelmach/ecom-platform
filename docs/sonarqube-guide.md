@@ -212,6 +212,28 @@ The `Quality Gate` stage:
 
 Because this stage runs before deploy, bad code quality can stop deployment.
 
+### Scheduled SonarQube Scans
+
+The Jenkinsfile also schedules regular SonarQube scans with:
+
+```groovy
+triggers {
+    cron('H H(2-4) * * 1-5')
+}
+```
+
+This runs the pipeline once per weekday during the Jenkins-selected hour between 02:00 and 04:59.
+
+Scheduled scans:
+
+- run backend verification
+- run frontend tests and build
+- run SonarQube analysis
+- enforce the Quality Gate
+- skip Docker image publishing, deployment, and health checks
+
+This keeps code health monitored continuously without redeploying production from a timer-triggered build.
+
 ## 7) Coverage Configuration
 
 ### Backend Coverage
