@@ -3,6 +3,8 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mat-sys-outline-variant) transparent;
 }
 
 html,
@@ -10,16 +12,10 @@ body {
   height: 100%;
   margin: 0;
   font-family: Roboto, 'Helvetica Neue', sans-serif;
-  // font-family: 'Inter', 'Roboto', sans-serif;
 }
 
 html.dark-theme {
   color-scheme: dark;
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--mat-sys-outline-variant) transparent;
 }
 
 *::-webkit-scrollbar {
