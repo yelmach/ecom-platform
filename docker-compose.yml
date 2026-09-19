@@ -5,16 +5,17 @@ services:
   mongo:
     image: mongo:latest
     container_name: ecom-mongo
+    command: ["mongod", "--port", "${MONGO_PORT}"]
     ports:
-      - "${MONGO_PORT}:27017"
+      - "${MONGO_PORT}:${MONGO_PORT}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ecom_db
+      MONGO_INITDB_DATABASE: ${MONGO_USER_DATABASE}
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --port ${MONGO_PORT} -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,11 +51,10 @@ services:
   # SERVICE DISCOVERY (Eureka)
   # ----------------------------
   discovery-service:
-    build:
-      context: ./backend/discovery-service
+    image: ${IMAGE_REGISTRY}/ecom-discovery-service:${IMAGE_TAG}
     container_name: ecom-discovery-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     ports:
       - "${EUREKA_PORT}:${EUREKA_PORT}"
     restart: unless-stopped
@@ -71,11 +71,10 @@ services:
   # MEDIA SERVICE
   # ----------------------------
   media-service:
-    build:
-      context: ./backend/media-service
+    image: ${IMAGE_REGISTRY}/ecom-media-service:${IMAGE_TAG}
     container_name: ecom-media-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     depends_on:
       mongo:
         condition: service_healthy
@@ -97,13 +96,12 @@ services:
   # USER SERVICE
   # ----------------------------
   user-service:
-    build:
-      context: ./backend/user-service
+    image: ${IMAGE_REGISTRY}/ecom-user-service:${IMAGE_TAG}
     container_name: ecom-user-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     volumes:
-      - ./backend/keys:/opt/keys:ro
+      - ./backend/keys/private.pem:${JWT_PRIVATE_KEY_PATH}:ro
     depends_on:
       mongo:
         condition: service_healthy
@@ -123,11 +121,10 @@ services:
   # PRODUCT SERVICE
   # ----------------------------
   product-service:
-    build:
-      context: ./backend/product-service
+    image: ${IMAGE_REGISTRY}/ecom-product-service:${IMAGE_TAG}
     container_name: ecom-product-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     depends_on:
       mongo:
         condition: service_healthy
@@ -147,14 +144,13 @@ services:
   # API GATEWAY
   # ----------------------------
   gateway-service:
-    build:
-      context: ./backend/gateway-service
+    image: ${IMAGE_REGISTRY}/ecom-gateway-service:${IMAGE_TAG}
     container_name: ecom-gateway-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     volumes:
-      - ./backend/keys:/opt/keys:ro
-      - ./backend/certs:/opt/certs:ro
+      - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
+      - ./backend/certs/gateway.p12:${GATEWAY_SSL_KEY_STORE}:ro
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -165,7 +161,7 @@ services:
       media-service:
         condition: service_healthy
     ports:
-      - "${GATEWAY_PORT}:8443"
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
@@ -180,7 +176,7 @@ services:
   # FRONTEND (Angular + Nginx)
   # ----------------------------
   frontend:
-    build: ./frontend
+    image: ${IMAGE_REGISTRY}/ecom-frontend:${IMAGE_TAG}
     container_name: ecom-frontend
     depends_on:
       gateway-service:

@@ -119,13 +119,13 @@ cd ecom-platform
 Create the deployment env file from the example:
 
 ```bash
-cp backend/docker.env.example backend/docker.env
+cp .env.example .env
 ```
 
 Edit it:
 
 ```bash
-nano backend/docker.env
+nano .env
 ```
 
 At minimum, review and update:
@@ -176,7 +176,7 @@ openssl pkcs12 -export \
   -passout pass:changeit
 ```
 
-If you use `changeit`, then `backend/docker.env` must contain:
+If you use `changeit`, then `.env` must contain:
 
 ```env
 GATEWAY_SSL_KEY_STORE_PASSWORD=changeit
@@ -202,18 +202,18 @@ These two files must stay as a matching pair.
 From the repo root:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+docker compose --env-file .env -f docker-compose.dev.yml up --build -d
 ```
 
 Or using the Makefile:
 
 ```bash
-make prod-up
+make dev-up
 ```
 
 Note:
 
-- `make prod-up` runs attached
+- `make dev-up` builds local Dockerfiles and runs detached
 - the direct `docker compose ... -d` command is more convenient on the VM
 
 ## 11. Check Container Status
@@ -227,15 +227,15 @@ docker ps
 Check full logs:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml logs -f
+docker compose --env-file .env -f docker-compose.dev.yml logs -f
 ```
 
 Check a specific service:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml logs -f gateway-service
-docker compose --env-file backend/docker.env -f docker-compose.yml logs -f user-service
-docker compose --env-file backend/docker.env -f docker-compose.yml logs -f media-service
+docker compose --env-file .env -f docker-compose.dev.yml logs -f gateway-service
+docker compose --env-file .env -f docker-compose.dev.yml logs -f user-service
+docker compose --env-file .env -f docker-compose.dev.yml logs -f media-service
 ```
 
 ## 12. Test The Deployment
@@ -253,31 +253,31 @@ Because the certificate is self-signed, the browser will show a warning. Accept 
 Start:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d
+docker compose --env-file .env -f docker-compose.dev.yml up --build -d
 ```
 
 Stop:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml down
+docker compose --env-file .env -f docker-compose.dev.yml down
 ```
 
 Stop and remove volumes:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml down -v
+docker compose --env-file .env -f docker-compose.dev.yml down -v
 ```
 
 Restart one service:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml restart gateway-service
+docker compose --env-file .env -f docker-compose.dev.yml restart gateway-service
 ```
 
 Rebuild one service:
 
 ```bash
-docker compose --env-file backend/docker.env -f docker-compose.yml up --build -d gateway-service
+docker compose --env-file .env -f docker-compose.dev.yml up --build -d gateway-service
 ```
 
 ## 14. Manual Deployment Checklist
@@ -287,7 +287,7 @@ Use this checklist before moving to Jenkins:
 1. The VM is reachable by SSH
 2. Docker and Docker Compose are installed
 3. OCI ports are open
-4. `backend/docker.env` is configured for the VM
+4. Root `.env` is configured for the VM's Docker network
 5. `backend/certs` contains `gateway.crt`, `gateway.key`, and `gateway.p12`
 6. `backend/keys` contains `private.pem` and `public.pem`
 7. `docker compose ... up --build -d` completes successfully
@@ -342,7 +342,7 @@ Cause:
 Fix:
 
 - recreate `gateway.p12` with the correct password
-- or update `backend/docker.env` so the password matches
+- or update `.env` so the password matches
 
 ### Problem: Postman works but browser login/register gives `Forbidden`
 
@@ -352,7 +352,7 @@ Cause:
 
 Fix:
 
-- set `CORS_ALLOWED_ORIGINS` in `backend/docker.env`
+- set `CORS_ALLOWED_ORIGINS` in `.env`
 
 Example:
 
@@ -372,4 +372,3 @@ Before Jenkins, you need proof that:
 - the network and ports are correct
 
 Once manual deployment is stable, Jenkins can automate the same steps safely.
-

@@ -320,8 +320,8 @@ Build URL: ${env.BUILD_URL ?: 'N/A'}
                         sh """
                             set -e
                             cd "${DEPLOY_DIR}"
-                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml pull
-                            docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d --remove-orphans
+                            docker compose --env-file .env --env-file .last-successful-release.env -f docker-compose.yml pull
+                            docker compose --env-file .env --env-file .last-successful-release.env -f docker-compose.yml up -d --remove-orphans
                         """
                     } else {
                         echo "Skipping rollback because ${env.LAST_SUCCESSFUL_RELEASE_FILE} does not exist."

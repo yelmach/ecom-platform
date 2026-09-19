@@ -5,16 +5,17 @@ services:
   mongo:
     image: mongo:latest
     container_name: ecom-mongo
+    command: ["mongod", "--port", "${MONGO_PORT}"]
     ports:
-      - "${MONGO_PORT}:27017"
+      - "${MONGO_PORT}:${MONGO_PORT}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ecom_db
+      MONGO_INITDB_DATABASE: ${MONGO_USER_DATABASE}
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --port ${MONGO_PORT} -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,7 +55,7 @@ services:
       context: ./backend/discovery-service
     container_name: ecom-discovery-service
     env_file:
-      - ./backend/docker.env
+      - ./.env
     ports:
       - "${EUREKA_PORT}:${EUREKA_PORT}"
     depends_on:
@@ -69,6 +70,134 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # MEDIA SERVICE
+  # ----------------------------
+  media-service:
+    build:
+      context: ./backend/media-service
+    container_name: ecom-media-service
+    env_file:
+      - ./.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${MEDIA_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # USER SERVICE
+  # ----------------------------
+  user-service:
+    build:
+      context: ./backend/user-service
+    container_name: ecom-user-service
+    env_file:
+      - ./.env
+    volumes:
+      - ./backend/keys/private.pem:${JWT_PRIVATE_KEY_PATH}:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # PRODUCT SERVICE
+  # ----------------------------
+  product-service:
+    build:
+      context: ./backend/product-service
+    container_name: ecom-product-service
+    env_file:
+      - ./.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # API GATEWAY
+  # ----------------------------
+  gateway-service:
+    build:
+      context: ./backend/gateway-service
+    container_name: ecom-gateway-service
+    env_file:
+      - ./.env
+    volumes:
+      - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
+      - ./backend/certs/gateway.p12:${GATEWAY_SSL_KEY_STORE}:ro
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ecom-network
+
+  # ----------------------------
+  # FRONTEND (Angular + Nginx)
+  # ----------------------------
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ecom-frontend
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./backend/certs/gateway.crt:/etc/nginx/certs/gateway.crt:ro
+      - ./backend/certs/gateway.key:/etc/nginx/certs/gateway.key:ro
+    restart: unless-stopped
     networks:
       - ecom-network
 

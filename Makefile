@@ -1,24 +1,25 @@
-COMPOSE_ENV := backend/docker.env
-COMPOSE_PROD := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.yml
+COMPOSE_ENV := .env
 COMPOSE_DEV := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.dev.yml
 COMPOSE_SONAR := docker compose --env-file $(COMPOSE_ENV) -f sonarQube/docker-compose.yml
+DEV_INFRA_SERVICES := mongo minio discovery-service
 
-.PHONY: prod-up prod-down prod-down-v dev-infra-up dev-infra-down jenkins-up jenkins-down sonar-up sonar-down sonar-logs
+.PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down jenkins-up jenkins-down sonar-up sonar-down sonar-logs
 
-prod-up:
-	$(COMPOSE_PROD) up --build -d
-
-prod-down:
-	$(COMPOSE_PROD) down
-
-prod-down-v:
-	$(COMPOSE_PROD) down -v
-
-dev-infra-up:
+dev-up:
 	$(COMPOSE_DEV) up --build -d
 
-dev-infra-down:
+dev-down:
 	$(COMPOSE_DEV) down
+
+dev-down-v:
+	$(COMPOSE_DEV) down -v
+
+dev-infra-up:
+	$(COMPOSE_DEV) up --build -d $(DEV_INFRA_SERVICES)
+
+dev-infra-down:
+	$(COMPOSE_DEV) stop $(DEV_INFRA_SERVICES)
+	$(COMPOSE_DEV) rm -f $(DEV_INFRA_SERVICES)
 
 jenkins-up:
 	docker compose -f jenkins/docker-compose.yml up --build -d
