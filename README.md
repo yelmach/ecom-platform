@@ -47,7 +47,7 @@ Frontend:
 
 - Docker + Docker Compose
 - OpenSSL
-- Java 17
+- Java 21
 - Node.js + npm
 
 ## One-time setup
