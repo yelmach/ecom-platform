@@ -7,7 +7,7 @@
 - `/auth/**`, `/users/**` -> `USER-SERVICE`
 - `/products/**` -> `PRODUCT-SERVICE`
 - `/media/**` -> `MEDIA-SERVICE`
-- `/ecom-media/**` -> MinIO object endpoint (`http://minio:9000`)
+- `/ecom-media/**` -> the MinIO object endpoint configured by `MINIO_ENDPOINT`
 
 ## Auth behavior
 - Public: `POST /auth/login`, `POST /auth/register`

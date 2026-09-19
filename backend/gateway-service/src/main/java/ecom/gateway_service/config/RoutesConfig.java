@@ -1,5 +1,6 @@
 package ecom.gateway_service.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
@@ -9,16 +10,20 @@ import org.springframework.context.annotation.Configuration;
 public class RoutesConfig {
 
     private final AuthenticationFilter authenticationFilter;
+    private final String minioEndpoint;
 
-    public RoutesConfig(AuthenticationFilter authenticationFilter) {
+    public RoutesConfig(
+            AuthenticationFilter authenticationFilter,
+            @Value("${MINIO_ENDPOINT}") String minioEndpoint) {
         this.authenticationFilter = authenticationFilter;
+        this.minioEndpoint = minioEndpoint;
     }
 
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
                 .route("media-objects", r -> r.path("/ecom-media/**")
-                        .uri("http://minio:9000"))
+                        .uri(minioEndpoint))
                 .route("user-service", r -> r.path("/auth/**", "/users/**")
                         .filters(f -> f.filter(authenticationFilter.apply(new AuthenticationFilter.Config())))
                         .uri("lb://USER-SERVICE"))
