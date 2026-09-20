@@ -11,12 +11,37 @@ spring:
     import: optional:file:../../.env.local[.properties]
   application:
     name: gateway-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: file:${JWT_PUBLIC_KEY_PATH}
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: false
-          lower-case-service-id: true
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+          routes:
+            - id: media-objects
+              uri: ${MINIO_ENDPOINT}
+              predicates:
+                - Path=/ecom-media/**
+                - Method=GET,HEAD
+            - id: user-service
+              uri: lb://USER-SERVICE
+              predicates:
+                - Path=/auth/**,/users/**
+            - id: product-service
+              uri: lb://PRODUCT-SERVICE
+              predicates:
+                - Path=/products/**
+            - id: media-service
+              uri: lb://MEDIA-SERVICE
+              predicates:
+                - Path=/media/**
 
 eureka:
   client:
@@ -24,6 +49,3 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: http://${EUREKA_HOST}:${EUREKA_PORT}/eureka/
-
-jwt:
-  public-key: ${JWT_PUBLIC_KEY_PATH}
