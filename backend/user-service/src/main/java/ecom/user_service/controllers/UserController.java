@@ -1,6 +1,5 @@
 package ecom.user_service.controllers;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -24,13 +23,14 @@ public class UserController {
 
     @GetMapping
     public ResponseEntity<UserResponse> getCurrentUser(@RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.status(HttpStatus.OK).body(userService.getCurrentUser(userId));
+        return ResponseEntity.ok(userService.getCurrentUser(userId));
     }
 
     @PatchMapping
-    public ResponseEntity<UserResponse> UpdateProfile(@Valid @RequestBody UpdateRequest request, @RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<UserResponse> updateProfile(
+            @Valid @RequestBody UpdateRequest request,
+            @RequestHeader("X-User-Id") String userId) {
 
-        return ResponseEntity.status(HttpStatus.OK).body(userService.UpdateProfile(userId, request));
+        return ResponseEntity.ok(userService.updateProfile(userId, request));
     }
-
 }

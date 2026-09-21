@@ -102,6 +102,7 @@ services:
       - ./.env
     volumes:
       - ./backend/keys/private.pem:${JWT_PRIVATE_KEY_PATH}:ro
+      - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
     depends_on:
       mongo:
         condition: service_healthy

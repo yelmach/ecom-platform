@@ -13,6 +13,7 @@ import ecom.user_service.dto.response.AuthResponse;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.InvalidCredentialsException;
+import ecom.user_service.exceptions.UsernameAlreadyExistsException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,9 @@ public class AuthService {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Email already exists");
         }
+        if (userRepository.existsByUsername(request.username())) {
+            throw new UsernameAlreadyExistsException("Username already exists");
+        }
 
         User newUser = new User();
         newUser.setUsername(request.username());
@@ -38,7 +42,7 @@ public class AuthService {
         newUser.setRole(request.role());
 
         User savedUser = userRepository.save(newUser);
-        String token = jwtService.generateToken(newUser);
+        String token = jwtService.generateToken(savedUser);
         return new AuthResponse(token, UserResponse.fromEntity(savedUser));
     }
 
