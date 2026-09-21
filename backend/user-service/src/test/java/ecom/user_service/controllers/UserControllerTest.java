@@ -9,30 +9,27 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import ecom.user_service.dto.request.UpdateRequest;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.models.Role;
 import ecom.user_service.services.UserService;
+import ecom.user_service.config.SecurityConfig;
 
 @WebMvcTest(UserController.class)
+@Import(SecurityConfig.class)
 class UserControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @MockitoBean
     private UserService userService;
@@ -59,24 +56,23 @@ class UserControllerTest {
 
     @Test
     void updateProfile_ShouldReturn200AndUpdatedUserResponse() throws Exception {
-        UpdateRequest request = new UpdateRequest();
-        request.setUsername("newuser");
-        request.setEmail("newuser@test.com");
-        request.setRole(Role.SELLER);
+        String request = """
+                {"username":"newuser","email":"newuser@test.com","role":"SELLER"}
+                """;
 
-        UserResponse updatedResponse = new UserResponse(userId, "newuser@test.com", "newuser", Role.SELLER, null);
-        when(userService.UpdateProfile(eq(userId), any(UpdateRequest.class))).thenReturn(updatedResponse);
+        UserResponse updatedResponse = new UserResponse(userId, "newuser@test.com", "newuser", Role.CLIENT, null);
+        when(userService.updateProfile(eq(userId), any())).thenReturn(updatedResponse);
 
         mockMvc.perform(patch("/users/me")
                 .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(request))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("newuser@test.com"))
                 .andExpect(jsonPath("$.username").value("newuser"))
-                .andExpect(jsonPath("$.role").value("SELLER"));
+                .andExpect(jsonPath("$.role").value("CLIENT"));
 
-        verify(userService).UpdateProfile(eq(userId), any(UpdateRequest.class));
+        verify(userService).updateProfile(eq(userId), any());
     }
 
     @Test

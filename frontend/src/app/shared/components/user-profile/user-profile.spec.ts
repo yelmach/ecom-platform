@@ -161,18 +161,6 @@ describe('ProfileDialog Component', () => {
                 expect(dialogRefSpy.close).toHaveBeenCalledWith(updatedUser);
             });
 
-            it('should logout user if role is changed', () => {
-                const updatedUser = { ...mockUser, role: 'SELLER' as const };
-                userServiceSpy.updateProfile.and.returnValue(of(updatedUser));
-                component.profileForm.patchValue({ role: 'SELLER' });
-
-                component.onSubmit();
-
-                expect(userServiceSpy.updateProfile).toHaveBeenCalledWith({ role: 'SELLER' });
-                expect(dialogRefSpy.close).toHaveBeenCalled();
-                expect(authServiceSpy.logout).toHaveBeenCalledWith('/login');
-            });
-
             it('should handle backend field errors', () => {
                 const errorResponse = new HttpErrorResponse({
                     error: { details: { email: 'Email is already taken' } },

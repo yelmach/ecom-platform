@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -29,8 +28,8 @@ class MediaValidationServiceTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        mediaValidationService = new MediaValidationService(builder);
-        ReflectionTestUtils.setField(mediaValidationService, "mediaServiceBaseUrl", "http://media-service");
+        RestClient restClient = builder.baseUrl("http://media-service").build();
+        mediaValidationService = new MediaValidationService(restClient);
     }
 
     @Test

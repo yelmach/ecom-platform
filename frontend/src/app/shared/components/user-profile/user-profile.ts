@@ -4,11 +4,10 @@ import { ReactiveFormsModule, FormGroup, FormControl, Validators } from '@angula
 import { MAT_DIALOG_DATA, MatDialogClose, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { finalize, switchMap } from 'rxjs';
-import { User, UserRole, UpdateUserRequest } from '../../../core/models/user';
+import { User, UpdateUserRequest } from '../../../core/models/user';
 import { UserService } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MediaService } from '../../../core/services/media.service';
@@ -19,7 +18,6 @@ import { MediaService } from '../../../core/services/media.service';
     ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSelectModule,
     MatButtonModule,
     MatIconModule,
     MatDialogClose,
@@ -43,8 +41,6 @@ export class ProfileDialog implements OnInit {
   readonly avatarRemoved = signal(false);
   private avatarFile: File | null = null;
 
-  readonly roles: UserRole[] = ['CLIENT', 'SELLER'];
-
   readonly profileForm = new FormGroup({
     username: new FormControl(this.user.username, {
       nonNullable: true,
@@ -57,9 +53,6 @@ export class ProfileDialog implements OnInit {
     password: new FormControl('', {
       nonNullable: true,
       validators: [Validators.minLength(6), Validators.maxLength(100)],
-    }),
-    role: new FormControl<UserRole>(this.user.role, {
-      nonNullable: true,
     }),
   });
 
@@ -119,7 +112,6 @@ export class ProfileDialog implements OnInit {
 
     const formValue = this.profileForm.getRawValue();
     const payload: UpdateUserRequest = {};
-    const roleChanged = formValue.role !== this.user.role;
 
     if (formValue.username !== this.user.username) {
       payload.username = formValue.username;
@@ -129,9 +121,6 @@ export class ProfileDialog implements OnInit {
     }
     if (formValue.password) {
       payload.password = formValue.password;
-    }
-    if (formValue.role !== this.user.role) {
-      payload.role = formValue.role;
     }
     if (this.avatarRemoved()) {
       payload.avatarMediaId = null;
@@ -157,11 +146,6 @@ export class ProfileDialog implements OnInit {
       .pipe(finalize(() => this.isSubmitting.set(false)))
       .subscribe({
         next: (updatedUser) => {
-          if (roleChanged) {
-            this.dialogRef.close();
-            this.authService.logout('/login');
-            return;
-          }
           this.authService.currentUser.set(updatedUser);
           this.dialogRef.close(updatedUser);
         },

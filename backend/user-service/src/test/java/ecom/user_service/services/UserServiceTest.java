@@ -24,6 +24,7 @@ import ecom.user_service.dto.request.UpdateRequest;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.UserNotFoundException;
+import ecom.user_service.exceptions.UsernameAlreadyExistsException;
 import ecom.user_service.models.Role;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
@@ -73,26 +74,26 @@ public class UserServiceTest {
     }
 
     @Test
-    void UpdateProfileTest_Success() {
+    void updateProfile_Success() {
         UpdateRequest request = new UpdateRequest();
         request.setUsername("newName");
         request.setEmail("newName@test.com");
         request.setPassword("newName123");
-        request.setRole(Role.SELLER);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.existsByUsername("newName")).thenReturn(false);
         when(userRepository.existsByEmail("newName@test.com")).thenReturn(false);
         when(passwordEncoder.encode("newName123")).thenReturn("encodedNewPassword");
         when(userRepository.save(any(User.class))).thenReturn(mockUser);
 
-        UserResponse response = userService.UpdateProfile(userId, request);
+        UserResponse response = userService.updateProfile(userId, request);
 
         assertNotNull(response);
         verify(userRepository).save(mockUser);
         assertEquals("newName", mockUser.getUsername());
         assertEquals("newName@test.com", mockUser.getEmail());
         assertEquals("encodedNewPassword", mockUser.getPassword());
-        assertEquals(Role.SELLER, mockUser.getRole());
+        assertEquals(Role.CLIENT, mockUser.getRole());
     }
 
     @Test
@@ -104,7 +105,19 @@ public class UserServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
         when(userRepository.existsByEmail("taken@test.com")).thenReturn(true);
 
-        assertThrows(EmailAlreadyExistsException.class, () -> userService.UpdateProfile(userId, request));
+        assertThrows(EmailAlreadyExistsException.class, () -> userService.updateProfile(userId, request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateProfile_ThrowsUsernameAlreadyExistsException() {
+        UpdateRequest request = new UpdateRequest();
+        request.setUsername("takenName");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.existsByUsername("takenName")).thenReturn(true);
+
+        assertThrows(UsernameAlreadyExistsException.class, () -> userService.updateProfile(userId, request));
         verify(userRepository, never()).save(any(User.class));
     }
 
@@ -118,7 +131,7 @@ public class UserServiceTest {
         doNothing().when(mediaValidationService).validateAvatarOwnership(userId, "media-123");
         when(userRepository.save(any(User.class))).thenReturn(mockUser);
 
-        userService.UpdateProfile(userId, request);
+        userService.updateProfile(userId, request);
 
         assertEquals("media-123", mockUser.getAvatarMediaId());
         verify(mediaValidationService).validateAvatarOwnership(userId, "media-123");
@@ -126,11 +139,26 @@ public class UserServiceTest {
     }
 
     @Test
+    void updateProfile_RemovesAvatarWhenExplicitlySetToNull() {
+        mockUser.setAvatarMediaId("media-123");
+        UpdateRequest request = new UpdateRequest();
+        request.setAvatarMediaId(null);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(mockUser)).thenReturn(mockUser);
+
+        userService.updateProfile(userId, request);
+
+        assertEquals(null, mockUser.getAvatarMediaId());
+        verify(mediaValidationService, never()).validateAvatarOwnership(any(), any());
+    }
+
+    @Test
     void updateProfile_ThrowsUserNotFoundException() {
         UpdateRequest request = new UpdateRequest();
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThrows(UserNotFoundException.class, () -> userService.UpdateProfile(userId, request));
+        assertThrows(UserNotFoundException.class, () -> userService.updateProfile(userId, request));
         verify(userRepository, never()).save(any(User.class));
     }
 }
