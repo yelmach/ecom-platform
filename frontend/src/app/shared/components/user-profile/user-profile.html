@@ -65,16 +65,6 @@
       <mat-error>{{ getErrorMessage('password') }}</mat-error>
     </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Role</mat-label>
-      <mat-select formControlName="role">
-        @for (role of roles; track role) {
-          <mat-option [value]="role">{{ role }}</mat-option>
-        }
-      </mat-select>
-      <mat-icon matPrefix>badge</mat-icon>
-    </mat-form-field>
-
     @if (submitError()) {
       <p class="form-error">{{ submitError() }}</p>
     }

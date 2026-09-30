@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 COPY .mvn .mvn
@@ -9,7 +9,7 @@ RUN ./mvnw -DskipTests dependency:go-offline
 COPY src/ src/
 RUN ./mvnw -DskipTests clean package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 RUN apt-get update \

@@ -3,7 +3,6 @@ package ecom.user_service.dto.request;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 
-import ecom.user_service.models.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -23,8 +22,6 @@ public class UpdateRequest {
 
     @Size(min = 6, max = 100)
     private String password;
-
-    private Role role;
 
     private String avatarMediaId;
 

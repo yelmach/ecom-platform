@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import ecom.user_service.dto.request.LoginRequest;
@@ -23,8 +25,10 @@ import ecom.user_service.dto.response.AuthResponse;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.models.Role;
 import ecom.user_service.services.AuthService;
+import ecom.user_service.config.SecurityConfig;
 
 @WebMvcTest(AuthController.class)
+@Import(SecurityConfig.class)
 class AuthControllerTest {
 
     @Autowired
@@ -35,6 +39,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
 
     private AuthResponse mockAuthResponse;
 
@@ -59,7 +66,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void login_ShouldReturn201AndAuthResponse() throws Exception {
+    void login_ShouldReturn200AndAuthResponse() throws Exception {
         LoginRequest request = new LoginRequest("test@test.com", "password");
 
         when(authService.login(any(LoginRequest.class))).thenReturn(mockAuthResponse);
@@ -67,7 +74,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("mock-jwt-token"))
                 .andExpect(jsonPath("$.user.username").value("testuser"));
     }

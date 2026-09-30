@@ -48,12 +48,12 @@ Important details:
 
 - the SonarQube image is `sonarqube:community`
 - SonarQube is exposed on host port `9002`
-- PostgreSQL credentials come from `backend/docker.env`
+- PostgreSQL credentials come from root `.env`
 - Docker named volumes persist database and SonarQube data
 
 ### Required Environment Variables
 
-Make sure `backend/docker.env` contains:
+Make sure `.env` contains:
 
 ```env
 SONARQUBE_DB_NAME=sonarqube
@@ -63,7 +63,7 @@ SONARQUBE_DB_PASSWORD=your-strong-password
 
 The template already includes these keys:
 
-- `backend/docker.env.example`
+- `.env.example`
 
 ## 2) Start SonarQube
 
@@ -89,7 +89,7 @@ make sonar-down
 If you want to confirm the containers are running:
 
 ```bash
-docker compose --env-file backend/docker.env -f sonarQube/docker-compose.yml ps
+docker compose --env-file .env -f sonarQube/docker-compose.yml ps
 ```
 
 ## 3) First-Time SonarQube Setup In The UI

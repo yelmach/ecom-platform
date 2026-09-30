@@ -7,6 +7,7 @@ import ecom.user_service.dto.request.UpdateRequest;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.UserNotFoundException;
+import ecom.user_service.exceptions.UsernameAlreadyExistsException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,15 +25,20 @@ public class UserService {
         return UserResponse.fromEntity(user);
     }
 
-    public UserResponse UpdateProfile(String userId, UpdateRequest updateRequest) {
+    public UserResponse updateProfile(String userId, UpdateRequest updateRequest) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (updateRequest.getUsername() != null && !updateRequest.getUsername().trim().isEmpty()) {
-            user.setUsername(updateRequest.getUsername().trim());
+            String newUsername = updateRequest.getUsername().trim();
+            if (!user.getUsername().equals(newUsername)) {
+                if (userRepository.existsByUsername(newUsername)) {
+                    throw new UsernameAlreadyExistsException("Username already exists");
+                }
+                user.setUsername(newUsername);
+            }
         }
 
-        // Update email
         if (updateRequest.getEmail() != null && !updateRequest.getEmail().trim().isEmpty()) {
             String newEmail = updateRequest.getEmail().trim();
             if (!user.getEmail().equals(newEmail)) {
@@ -43,13 +49,8 @@ public class UserService {
             }
         }
 
-        // Update password
         if (updateRequest.getPassword() != null && !updateRequest.getPassword().trim().isEmpty()) {
             user.setPassword(passwordEncoder.encode(updateRequest.getPassword()));
-        }
-
-        if (updateRequest.getRole() != null && !updateRequest.getRole().toString().trim().isEmpty()) {
-            user.setRole(updateRequest.getRole());
         }
 
         if (updateRequest.isAvatarMediaIdProvided()) {

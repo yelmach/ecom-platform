@@ -9,7 +9,7 @@ The goal is to make deployment and rollback depend on immutable image tags, not 
 The deployment flow uses these files:
 
 - `Jenkinsfile`
-- `docker-compose.prod.yml`
+- `docker-compose.yml`
 - `scripts/ci/build-push-images.sh`
 - `scripts/ci/deploy-prod.sh`
 - `scripts/ci/health-check.sh`
@@ -98,7 +98,7 @@ This file is important because deploy and rollback use it to know exactly which 
 Production deployment uses:
 
 ```text
-docker-compose.prod.yml
+docker-compose.yml
 ```
 
 Unlike past development compose, it does not build images from source. It pulls images from GHCR:
@@ -123,7 +123,7 @@ The script `scripts/ci/deploy-prod.sh`:
 Runtime-only files preserved on the VM:
 
 ```text
-/home/opc/ecom-platform-deploy/backend/docker.env
+/home/opc/ecom-platform-deploy/.env
 /home/opc/ecom-platform-deploy/backend/certs/
 /home/opc/ecom-platform-deploy/backend/keys/
 ```
@@ -131,8 +131,7 @@ Runtime-only files preserved on the VM:
 Deployment files copied by Jenkins:
 
 ```text
-/home/opc/ecom-platform-deploy/docker-compose.prod.yml
-/home/opc/ecom-platform-deploy/Makefile
+/home/opc/ecom-platform-deploy/docker-compose.yml
 /home/opc/ecom-platform-deploy/scripts/ci/
 /home/opc/ecom-platform-deploy/.release.env
 ```
@@ -140,7 +139,7 @@ Deployment files copied by Jenkins:
 Deploy command:
 
 ```bash
-docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env --env-file .release.env -f docker-compose.yml up -d --remove-orphans
 ```
 
 `--remove-orphans` removes old containers for services that no longer exist in the compose file.
@@ -171,7 +170,7 @@ If a deployment was attempted and the pipeline fails after that point, The rollb
 Then it pulls and starts the previous successful image tag:
 
 ```bash
-docker compose --env-file backend/docker.env --env-file .last-successful-release.env -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env --env-file .last-successful-release.env -f docker-compose.yml up -d --remove-orphans
 ```
 
 This is safer than rebuilding an old commit because the rollback runs the exact images that already passed a previous deployment health check.
@@ -183,7 +182,7 @@ After a successful main deployment:
 ```bash
 cat .release.env
 cat .last-successful-release.env
-docker compose --env-file backend/docker.env --env-file .release.env -f docker-compose.prod.yml ps
+docker compose --env-file .env --env-file .release.env -f docker-compose.yml ps
 ```
 
 To inspect the running image tags:

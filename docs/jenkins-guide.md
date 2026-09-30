@@ -125,7 +125,7 @@ Why:
 Before Jenkins deployment works, this directory must already contain the runtime-only files:
 
 ```text
-/home/opc/ecom-platform-deploy/backend/docker.env
+/home/opc/ecom-platform-deploy/.env
 /home/opc/ecom-platform-deploy/backend/certs/
 /home/opc/ecom-platform-deploy/backend/keys/
 ```
@@ -277,21 +277,23 @@ Reference:
      ```bash
      ./scripts/ci/deploy-prod.sh
      ```
-   - copies `docker-compose.prod.yml`, `Makefile`, and `scripts/ci/` into the stable deploy directory
+   - copies `docker-compose.yml` and `scripts/ci/` into the stable deploy directory
+   - verifies that the deploy directory already contains root `.env`
    - leaves runtime-only secrets and certs untouched
-   - deploys from `docker-compose.prod.yml` by pulling GHCR images
+   - deploys from `docker-compose.yml` by pulling GHCR images
 
 10. `Health Check`
-   - runs only on `main`, not pull requests
-   - calls:
-     ```bash
-     ./scripts/ci/health-check.sh
-     ```
-   - checks:
-     - gateway health endpoint
-     - frontend availability
-   - uses retries
-   - only if health checks pass, saves `.release.env` as `.last-successful-release.env`
+
+- runs only on `main`, not pull requests
+- calls:
+  ```bash
+  ./scripts/ci/health-check.sh
+  ```
+- checks:
+  - gateway health endpoint
+  - frontend availability
+- uses retries
+- only if health checks pass, saves `.release.env` as `.last-successful-release.env`
 
 ### CI Scripts
 

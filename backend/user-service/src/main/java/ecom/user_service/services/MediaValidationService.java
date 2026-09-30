@@ -1,7 +1,6 @@
 package ecom.user_service.services;
 
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -13,16 +12,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MediaValidationService {
 
-    private final RestClient.Builder restClientBuilder;
-
-    @Value("${media.service.base-url}")
-    private String mediaServiceBaseUrl;
+    private final RestClient mediaServiceRestClient;
 
     public void validateAvatarOwnership(String userId, String avatarMediaId) {
         try {
-            ProfileImageResponse response = restClientBuilder.build()
+            ProfileImageResponse response = mediaServiceRestClient
                     .get()
-                    .uri(buildUrl("/media/profile/{userId}"), userId)
+                    .uri("/media/profile/{userId}", userId)
                     .retrieve()
                     .body(ProfileImageResponse.class);
 
@@ -38,13 +34,6 @@ public class MediaValidationService {
         } catch (RestClientException ex) {
             throw new IllegalStateException("Failed to validate avatar media reference", ex);
         }
-    }
-
-    private String buildUrl(String path) {
-        if (mediaServiceBaseUrl.endsWith("/")) {
-            return mediaServiceBaseUrl.substring(0, mediaServiceBaseUrl.length() - 1) + path;
-        }
-        return mediaServiceBaseUrl + path;
     }
 
     private record ProfileImageResponse(MediaImageResponse avatar) {

@@ -2,37 +2,49 @@ package ecom.gateway_service.config;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class CorsConfig {
 
-    @Value("${cors.allowed-origins:https://localhost:4200,http://localhost:4200}")
-    private String allowedOrigins;
+    private final String allowedOrigins;
+
+    public CorsConfig(
+            @Value("${cors.allowed-origins:https://localhost:4200,http://localhost:4200}") String allowedOrigins) {
+        this.allowedOrigins = allowedOrigins;
+    }
 
     @Bean
-    public CorsWebFilter corsWebFilter() {
+    UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isBlank())
-                .collect(Collectors.toList());
 
-        config.setAllowCredentials(true);
-        config.setAllowedOrigins(origins);
-        config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedOrigins(
+                Arrays.stream(allowedOrigins.split(","))
+                        .map(origin -> origin.trim())
+                        .filter(origin -> !origin.isBlank())
+                        .toList());
+
+        config.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE));
+
+        config.setAllowedMethods(List.of(
+                "GET",
+                "HEAD",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
 
-        return new CorsWebFilter(source);
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

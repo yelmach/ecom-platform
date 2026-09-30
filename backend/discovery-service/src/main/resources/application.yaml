@@ -3,7 +3,7 @@ server:
 
 spring:
   config:
-    import: optional:file:../.env[.properties]
+    import: optional:file:../../.env.local[.properties]
   application:
     name: discovery-server
 

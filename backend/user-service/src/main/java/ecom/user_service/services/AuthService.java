@@ -4,7 +4,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import ecom.user_service.dto.request.LoginRequest;
@@ -13,6 +13,7 @@ import ecom.user_service.dto.response.AuthResponse;
 import ecom.user_service.dto.response.UserResponse;
 import ecom.user_service.exceptions.EmailAlreadyExistsException;
 import ecom.user_service.exceptions.InvalidCredentialsException;
+import ecom.user_service.exceptions.UsernameAlreadyExistsException;
 import ecom.user_service.models.User;
 import ecom.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,13 +23,16 @@ import lombok.RequiredArgsConstructor;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyExistsException("Email already exists");
+        }
+        if (userRepository.existsByUsername(request.username())) {
+            throw new UsernameAlreadyExistsException("Username already exists");
         }
 
         User newUser = new User();
@@ -38,7 +42,7 @@ public class AuthService {
         newUser.setRole(request.role());
 
         User savedUser = userRepository.save(newUser);
-        String token = jwtService.generateToken(newUser);
+        String token = jwtService.generateToken(savedUser);
         return new AuthResponse(token, UserResponse.fromEntity(savedUser));
     }
 
