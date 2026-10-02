@@ -173,6 +173,8 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 2. Upload images: `POST /media/images` with `productId` + `files[]`
 3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
 
+Product uploads verify ownership through an internal product-service endpoint before validating files. Media discovers product service through Eureka using Spring Cloud LoadBalancer; a fixed `PRODUCT_SERVICE_BASE_URL` is no longer required. Media accepts JPEG and PNG using Apache Tika content type detection and ImageIO decoding checks; GIF and WebP are unsupported. Deploy product service before media service when introducing this ownership check. See the media-service README for upload failure and cleanup behavior.
+
 ## Compose files
 
 - `docker-compose.dev.yml` builds the complete application from local Dockerfiles.

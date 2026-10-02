@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,11 +26,13 @@ import lombok.RequiredArgsConstructor;
 public class MediaService {
 
     private static final int MAX_FILES_PER_PRODUCT_UPLOAD = 5;
+    private static final Logger LOGGER = LoggerFactory.getLogger(MediaService.class);
 
     private final MediaRepository mediaRepository;
     private final ObjectStorageService objectStorageService;
     private final FileValidationService fileValidationService;
     private final MediaUrlBuilder mediaUrlBuilder;
+    private final ProductOwnershipService productOwnershipService;
 
     public ProductImagesResponse uploadProductImages(String uploaderId, String productId, MultipartFile[] files) {
         requireNonBlank(uploaderId, "Authenticated user is required");
@@ -40,15 +45,16 @@ public class MediaService {
             throw new BadRequestException("A maximum of 5 image files is allowed per upload");
         }
 
-        List<MediaImageResponse> uploadedImages = new ArrayList<>();
-
+        productOwnershipService.verifyOwnership(productId, uploaderId);
+        List<ValidatedFile> validatedFiles = new ArrayList<>();
         for (MultipartFile file : files) {
-            ValidatedFile validatedFile = fileValidationService.validateImage(file);
+            validatedFiles.add(fileValidationService.validateImage(file));
+        }
+
+        List<MediaImageResponse> uploadedImages = new ArrayList<>();
+        for (ValidatedFile validatedFile : validatedFiles) {
             String objectKey = "products/" + productId + "/" + UUID.randomUUID() + validatedFile.extension();
-
-            objectStorageService.upload(objectKey, validatedFile.bytes(), validatedFile.contentType());
-
-            Media saved = mediaRepository.save(Media.builder()
+            Media saved = uploadAndSave(validatedFile, Media.builder()
                     .ownerId(productId)
                     .ownerType(OwnerType.PRODUCT)
                     .contentType(validatedFile.contentType())
@@ -87,9 +93,7 @@ public class MediaService {
 
         String objectKey = "avatars/" + userId + "/" + UUID.randomUUID() + validatedFile.extension();
 
-        objectStorageService.upload(objectKey, validatedFile.bytes(), validatedFile.contentType());
-
-        Media savedAvatar = mediaRepository.save(Media.builder()
+        Media savedAvatar = uploadAndSave(validatedFile, Media.builder()
                 .ownerId(userId)
                 .ownerType(OwnerType.AVATAR)
                 .contentType(validatedFile.contentType())
@@ -97,6 +101,22 @@ public class MediaService {
                 .build());
 
         return new ProfileImageResponse(toMediaImageResponse(savedAvatar));
+    }
+
+    private Media uploadAndSave(ValidatedFile file, Media metadata) {
+        try {
+            objectStorageService.upload(metadata.getObjectKey(), file.bytes(), file.contentType());
+            return mediaRepository.save(metadata);
+        } catch (RuntimeException originalFailure) {
+            try {
+                objectStorageService.delete(metadata.getObjectKey());
+            } catch (RuntimeException cleanupFailure) {
+                LOGGER.error("Failed to clean up uploaded object {}", metadata.getObjectKey(), cleanupFailure);
+                originalFailure.addSuppressed(cleanupFailure);
+            }
+            LOGGER.error("Failed to upload or save media for object {}", metadata.getObjectKey(), originalFailure);
+            throw originalFailure;
+        }
     }
 
     public ProfileImageResponse getProfileImage(String userId) {

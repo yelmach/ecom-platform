@@ -1,12 +1,18 @@
 package ecom.media_service.service;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,67 +23,109 @@ import ecom.media_service.config.MediaProperties;
 import ecom.media_service.exception.BadRequestException;
 
 class FileValidationServiceTest {
-
-    private FileValidationService fileValidationService;
+    private MediaProperties properties;
+    private FileValidationService validator;
 
     @BeforeEach
     void setUp() {
-        MediaProperties mediaProperties = new MediaProperties();
-        mediaProperties.setMaxFileSizeBytes(2L * 1024L * 1024L);
-        fileValidationService = new FileValidationService(mediaProperties);
+        properties = new MediaProperties();
+        validator = new FileValidationService(properties);
     }
 
     @Test
-    void validateImage_ShouldReturnValidatedFileForSupportedType() {
-        MockMultipartFile file = new MockMultipartFile(
-                "file",
-                "test.jpg",
-                "image/jpeg",
-                "image-bytes".getBytes(StandardCharsets.UTF_8));
-
-        ValidatedFile validatedFile = fileValidationService.validateImage(file);
-
-        assertEquals("image/jpeg", validatedFile.contentType());
-        assertEquals(".jpg", validatedFile.extension());
-        assertEquals("image-bytes", new String(validatedFile.bytes(), StandardCharsets.UTF_8));
+    void detectsRealJpegAndPngAndPreservesBytes() throws IOException {
+        for (String format : new String[] { "jpeg", "png" }) {
+            byte[] bytes = imageBytes(format);
+            ValidatedFile result = validator.validateImage(file("image/" + format, bytes));
+            assertArrayEquals(bytes, result.bytes());
+            assertEquals("image/" + format, result.contentType());
+            assertEquals(format.equals("jpeg") ? ".jpg" : "." + format, result.extension());
+        }
     }
 
     @Test
-    void validateImage_ShouldThrowWhenFileMissingOrEmpty() {
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(null));
-
-        MockMultipartFile empty = new MockMultipartFile("file", "empty.jpg", "image/jpeg", new byte[0]);
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(empty));
+    void usesContentsInsteadOfDeclaredMimeTypeAndFilename() throws IOException {
+        for (String declaredType : new String[] { null, "", "text/plain", "image/jpeg" }) {
+            byte[] bytes = imageBytes("png");
+            MockMultipartFile misleadingFile = new MockMultipartFile("file", "image.jpg", declaredType, bytes);
+            ValidatedFile result = validator.validateImage(misleadingFile);
+            assertEquals("image/png", result.contentType());
+            assertEquals(".png", result.extension());
+            assertArrayEquals(bytes, result.bytes());
+        }
     }
 
     @Test
-    void validateImage_ShouldThrowWhenFileTooLarge() {
-        byte[] large = new byte[(int) (2L * 1024L * 1024L + 1L)];
-        MockMultipartFile file = new MockMultipartFile("file", "large.jpg", "image/jpeg", large);
-
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(file));
+    void rejectsTextLabelledAsAnImage() {
+        assertThrows(BadRequestException.class,
+                () -> validator.validateImage(file("image/jpeg", "not an image".getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test
-    void validateImage_ShouldThrowWhenContentTypeInvalid() {
-        MockMultipartFile noContentType = new MockMultipartFile("file", "a.jpg", null, "x".getBytes(StandardCharsets.UTF_8));
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(noContentType));
-
-        MockMultipartFile notImage = new MockMultipartFile("file", "a.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(notImage));
-
-        MockMultipartFile unsupportedImage = new MockMultipartFile("file", "a.bmp", "image/bmp", "x".getBytes(StandardCharsets.UTF_8));
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(unsupportedImage));
+    void rejectsTruncatedImagesEvenWhenTikaRecognizesTheirType() throws IOException {
+        for (String format : new String[] { "jpeg", "png" }) {
+            byte[] truncated = Arrays.copyOf(imageBytes(format), 32);
+            assertEquals("image/" + format, new org.apache.tika.Tika().detect(truncated));
+            BadRequestException failure = assertThrows(BadRequestException.class,
+                    () -> validator.validateImage(file("image/" + format, truncated)));
+            assertEquals("File is not a valid image", failure.getMessage());
+        }
     }
 
     @Test
-    void validateImage_ShouldThrowWhenReadFails() throws IOException {
+    void rejectsGifEvenWhenLabelledAsPng() throws IOException {
+        byte[] gif = imageBytes("gif");
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/gif", gif)));
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/png", gif)));
+    }
+
+    @Test
+    void rejectsMissingEmptyAndUnsupportedFiles() {
+        assertThrows(BadRequestException.class, () -> validator.validateImage(null));
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/png", new byte[0])));
+        for (String type : new String[] { null, "", "text/plain", "image/bmp", "image/webp" }) {
+            assertThrows(BadRequestException.class, () -> validator.validateImage(file(type, new byte[] { 1 })));
+        }
+    }
+
+    @Test
+    void rejectsWebpBytesEvenWhenDeclaredAsPng() {
+        byte[] webp = java.util.Base64.getDecoder().decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/webp", webp)));
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/png", webp)));
+    }
+
+    @Test
+    void checksBothReportedAndActualSize() throws IOException {
+        byte[] large = new byte[(int) properties.getMaxFileSizeBytes() + 1];
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file("image/png", large)));
+        MultipartFile lyingFile = mock(MultipartFile.class);
+        when(lyingFile.getSize()).thenReturn(1L);
+        when(lyingFile.getBytes()).thenReturn(large);
+        assertThrows(BadRequestException.class, () -> validator.validateImage(lyingFile));
+    }
+
+    @Test
+    void rejectsEmptyBytesEvenIfMultipartClaimsFileIsNonempty() throws IOException {
         MultipartFile file = mock(MultipartFile.class);
-        when(file.isEmpty()).thenReturn(false);
-        when(file.getSize()).thenReturn(3L);
-        when(file.getContentType()).thenReturn("image/png");
-        when(file.getBytes()).thenThrow(new IOException("boom"));
+        when(file.getBytes()).thenReturn(new byte[0]);
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file));
+    }
 
-        assertThrows(BadRequestException.class, () -> fileValidationService.validateImage(file));
+    @Test
+    void readFailureBecomesBadRequest() throws IOException {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getBytes()).thenThrow(new IOException("failed read"));
+        assertThrows(BadRequestException.class, () -> validator.validateImage(file));
+    }
+
+    private MockMultipartFile file(String type, byte[] bytes) {
+        return new MockMultipartFile("file", "ignored-filename.bin", type, bytes);
+    }
+
+    private byte[] imageBytes(String format) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), format, output);
+        return output.toByteArray();
     }
 }
