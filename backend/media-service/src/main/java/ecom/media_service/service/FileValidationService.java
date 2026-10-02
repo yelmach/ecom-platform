@@ -3,6 +3,8 @@ package ecom.media_service.service;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 
@@ -20,6 +22,14 @@ public class FileValidationService {
 
     private final MediaProperties mediaProperties;
     private final Tika tika = new Tika();
+
+    public List<ValidatedFile> validateImages(MultipartFile[] files) {
+        List<ValidatedFile> validatedFiles = new ArrayList<>(files.length);
+        for (MultipartFile file : files) {
+            validatedFiles.add(validateImage(file));
+        }
+        return List.copyOf(validatedFiles);
+    }
 
     public ValidatedFile validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {

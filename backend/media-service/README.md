@@ -31,15 +31,23 @@
 - Eureka (`discovery-service`)
 - Product service (internal ownership check; discovered through Eureka and reached without the gateway)
 
+## Code organization
+
+The existing folders are retained. Controllers handle HTTP requests and `MediaService` coordinates product and avatar workflows. `FileValidationService` validates individual images or an entire batch; `ProductOwnershipService` calls product service through Eureka. `MediaStorageService` generates object keys, uploads bytes, saves metadata, and cleans up the current object on failure. It also deletes old avatar objects and metadata. `storage/` contains the storage interface and its MinIO implementation, while `MediaUrlBuilder` builds response URLs.
+
+Configuration stays in `config/`: `MediaProperties` binds and validates settings, `MinioConfig` creates the client, `MinioBucketInitializer` prepares the bucket and its policy, and `HttpClientConfig` creates the load-balanced product client.
+
 ## Configuration
 - `MEDIA_SERVICE_PORT` (default `8083`)
 - `MONGO_*`, `EUREKA_*`
 - `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET`
 - `MEDIA_PUBLIC_BASE_URL`
 
+Missing or blank MinIO settings and public base URL fail startup. `media.max-file-size-bytes` must be positive and defaults to 2 MB.
+
 ## Ownership and failures
 
-JWT validation stays at the gateway. Media trusts the forwarded `X-User-Id` on the private backend network and calls `GET /internal/products/{productId}/ownership` with that identity. Its load-balanced RestClient uses the logical address `http://product-service`; Spring Cloud LoadBalancer selects an instance registered in Eureka and supplies its host and port. The client retains its 1-second connection timeout and 5-second response timeout.
+JWT validation stays at the gateway. Media trusts the forwarded `X-User-Id` on the private backend network and calls `GET /internal/products/{productId}/ownership` with that identity. Its load-balanced RestClient uses the logical address `http://product-service`; Spring Cloud LoadBalancer selects an instance registered in Eureka and supplies its host and port. The client retains its 1-second connection timeout and 3-second response timeout.
 
 - `400`: invalid input, unsupported detected file type, unreadable image contents, oversized file, or malformed ownership request
 - `403`: product belongs to another seller

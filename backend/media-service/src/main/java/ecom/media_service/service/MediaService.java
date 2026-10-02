@@ -2,10 +2,6 @@ package ecom.media_service.service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +14,6 @@ import ecom.media_service.exception.MediaNotFoundException;
 import ecom.media_service.model.Media;
 import ecom.media_service.model.OwnerType;
 import ecom.media_service.repository.MediaRepository;
-import ecom.media_service.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -26,10 +21,9 @@ import lombok.RequiredArgsConstructor;
 public class MediaService {
 
     private static final int MAX_FILES_PER_PRODUCT_UPLOAD = 5;
-    private static final Logger LOGGER = LoggerFactory.getLogger(MediaService.class);
 
     private final MediaRepository mediaRepository;
-    private final ObjectStorageService objectStorageService;
+    private final MediaStorageService mediaStorageService;
     private final FileValidationService fileValidationService;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final ProductOwnershipService productOwnershipService;
@@ -46,20 +40,11 @@ public class MediaService {
         }
 
         productOwnershipService.verifyOwnership(productId, uploaderId);
-        List<ValidatedFile> validatedFiles = new ArrayList<>();
-        for (MultipartFile file : files) {
-            validatedFiles.add(fileValidationService.validateImage(file));
-        }
+        List<ValidatedFile> validatedFiles = fileValidationService.validateImages(files);
 
         List<MediaImageResponse> uploadedImages = new ArrayList<>();
         for (ValidatedFile validatedFile : validatedFiles) {
-            String objectKey = "products/" + productId + "/" + UUID.randomUUID() + validatedFile.extension();
-            Media saved = uploadAndSave(validatedFile, Media.builder()
-                    .ownerId(productId)
-                    .ownerType(OwnerType.PRODUCT)
-                    .contentType(validatedFile.contentType())
-                    .objectKey(objectKey)
-                    .build());
+            Media saved = mediaStorageService.save(OwnerType.PRODUCT, productId, validatedFile);
 
             uploadedImages.add(toMediaImageResponse(saved));
         }
@@ -84,39 +69,10 @@ public class MediaService {
 
         // Keep one active avatar: remove old avatar metadata and object first.
         List<Media> existingAvatars = mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, userId);
-        for (Media avatar : existingAvatars) {
-            objectStorageService.delete(avatar.getObjectKey());
-        }
-        if (!existingAvatars.isEmpty()) {
-            mediaRepository.deleteAll(existingAvatars);
-        }
-
-        String objectKey = "avatars/" + userId + "/" + UUID.randomUUID() + validatedFile.extension();
-
-        Media savedAvatar = uploadAndSave(validatedFile, Media.builder()
-                .ownerId(userId)
-                .ownerType(OwnerType.AVATAR)
-                .contentType(validatedFile.contentType())
-                .objectKey(objectKey)
-                .build());
+        mediaStorageService.delete(existingAvatars);
+        Media savedAvatar = mediaStorageService.save(OwnerType.AVATAR, userId, validatedFile);
 
         return new ProfileImageResponse(toMediaImageResponse(savedAvatar));
-    }
-
-    private Media uploadAndSave(ValidatedFile file, Media metadata) {
-        try {
-            objectStorageService.upload(metadata.getObjectKey(), file.bytes(), file.contentType());
-            return mediaRepository.save(metadata);
-        } catch (RuntimeException originalFailure) {
-            try {
-                objectStorageService.delete(metadata.getObjectKey());
-            } catch (RuntimeException cleanupFailure) {
-                LOGGER.error("Failed to clean up uploaded object {}", metadata.getObjectKey(), cleanupFailure);
-                originalFailure.addSuppressed(cleanupFailure);
-            }
-            LOGGER.error("Failed to upload or save media for object {}", metadata.getObjectKey(), originalFailure);
-            throw originalFailure;
-        }
     }
 
     public ProfileImageResponse getProfileImage(String userId) {

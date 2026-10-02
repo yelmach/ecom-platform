@@ -33,6 +33,18 @@ class FileValidationServiceTest {
     }
 
     @Test
+    void validatesCompleteBatchAndRejectsInvalidLaterFile() throws IOException {
+        MultipartFile jpeg = file("image/jpeg", imageBytes("jpeg"));
+        MultipartFile png = file("image/png", imageBytes("png"));
+        var validated = validator.validateImages(new MultipartFile[] { jpeg, png });
+        assertEquals(2, validated.size());
+        assertEquals("image/jpeg", validated.get(0).contentType());
+        assertEquals("image/png", validated.get(1).contentType());
+        assertThrows(BadRequestException.class, () -> validator.validateImages(new MultipartFile[] {
+                jpeg, file("image/png", "invalid".getBytes(StandardCharsets.UTF_8)) }));
+    }
+
+    @Test
     void detectsRealJpegAndPngAndPreservesBytes() throws IOException {
         for (String format : new String[] { "jpeg", "png" }) {
             byte[] bytes = imageBytes(format);
