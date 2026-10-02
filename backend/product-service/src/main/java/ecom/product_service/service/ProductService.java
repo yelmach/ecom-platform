@@ -92,6 +92,13 @@ public class ProductService {
         productRepository.delete(existingProduct);
     }
 
+    public void verifyOwnership(String id, String sellerId) {
+        if (sellerId == null || sellerId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-User-Id must not be blank");
+        }
+        checkOwnership(findByIdOrThrow(id), sellerId);
+    }
+
     private Product findByIdOrThrow(String id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));

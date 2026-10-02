@@ -153,6 +153,16 @@ class SecurityConfigTest {
     }
 
     @Test
+    void internalOwnershipEndpointIsDeniedEvenWithSellerTokenAndIdentityHeader() {
+        String path = "/internal/products/product-1/ownership";
+        webTestClient.get().uri(path).exchange().expectStatus().isUnauthorized();
+        webTestClient.get().uri(path)
+                .header(HttpHeaders.AUTHORIZATION, bearer(token(SIGNING_KEY, "SELLER", Instant.now().plusSeconds(60))))
+                .header("X-User-Id", "user-1")
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     void yamlDefinesExpectedRoutesAndRestrictsMinioMethods() {
         List<RouteDefinition> routes = routeDefinitionLocator.getRouteDefinitions().collectList().block();
 
@@ -248,7 +258,7 @@ class SecurityConfigTest {
             @RequestMapping(
                     path = {
                             "/auth/login", "/auth/register", "/products", "/products/{id}",
-                            "/users/me", "/media/images", "/media/images/{id}",
+                            "/users/me", "/media/images", "/media/images/{id}", "/internal/products/{id}/ownership",
                             "/media/profile", "/media/profile/{id}"
                     },
                     method = {
