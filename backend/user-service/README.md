@@ -36,17 +36,19 @@ that bypasses the gateway.
 ## Dependencies
 - MongoDB
 - Eureka (`discovery-service`)
-- Media service (`MEDIA_SERVICE_BASE_URL`)
+- Media service (Eureka discovery)
 - JWT RSA key pair (`JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`)
 
 ## Configuration
 - `USER_SERVICE_PORT` (default `8081`)
 - `MONGO_*`, `EUREKA_*`, `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`
 - `JWT_EXPIRATION` as a duration such as `24h`
-- `MEDIA_SERVICE_BASE_URL`
+- Media calls use `http://media-service` through Spring Cloud LoadBalancer, with 1-second connection and 3-second response timeouts.
 
 ## Quick run
 ```bash
 cd backend/user-service
 ./mvnw spring-boot:run
 ```
+
+Password DTOs enforce a maximum of 72 characters. Avatar ownership is validated through media’s internal ownership endpoint before saving the profile. Saving a new avatar reference does not delete previous avatars. Replacement cleanup is deferred to a future Kafka implementation. Media unavailability during ownership validation returns `503`. Deploy the new media endpoints before this caller.

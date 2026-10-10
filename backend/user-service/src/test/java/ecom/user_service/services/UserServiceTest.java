@@ -136,6 +136,20 @@ public class UserServiceTest {
         assertEquals("media-123", mockUser.getAvatarMediaId());
         verify(mediaValidationService).validateAvatarOwnership(userId, "media-123");
         verify(userRepository).save(mockUser);
+        var order = org.mockito.Mockito.inOrder(userRepository, mediaValidationService);
+        order.verify(mediaValidationService).validateAvatarOwnership(userId, "media-123");
+        order.verify(userRepository).save(mockUser);
+    }
+
+    @Test
+    void profileSaveFailureDoesNotPerformFurtherMediaCalls() {
+        UpdateRequest request = new UpdateRequest();
+        request.setAvatarMediaId("new-avatar");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(mockUser)).thenThrow(new IllegalStateException("Mongo unavailable"));
+        assertThrows(IllegalStateException.class, () -> userService.updateProfile(userId, request));
+        verify(mediaValidationService).validateAvatarOwnership(userId, "new-avatar");
+        org.mockito.Mockito.verifyNoMoreInteractions(mediaValidationService);
     }
 
     @Test

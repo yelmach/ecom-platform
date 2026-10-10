@@ -15,7 +15,7 @@ public record RegisterRequest(
         @NotBlank(message = "Email is required")
         String email,
         @NotBlank
-        @Size(min = 6, max = 100)
+        @Size(min = 6, max = 72)
         String password,
         @NotNull(message = "You must define your role")
         Role role

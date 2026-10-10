@@ -173,6 +173,8 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 2. Upload images: `POST /media/images` with `productId` + `files[]`
 3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
 
+User and product discover media service through Eureka with explicit HTTP timeouts; `MEDIA_SERVICE_BASE_URL` is no longer needed. Avatar uploads preserve previous images; replacement cleanup is deferred to a future Kafka implementation. Product image metadata is available at `GET /media/images/{productId}`; the browser loads returned object URLs through Gateway → MinIO.
+
 Product uploads verify ownership through an internal product-service endpoint before validating files. Media discovers product service through Eureka using Spring Cloud LoadBalancer; a fixed `PRODUCT_SERVICE_BASE_URL` is no longer required. Media accepts JPEG and PNG using Apache Tika content type detection and ImageIO decoding checks; GIF and WebP are unsupported. Deploy product service before media service when introducing this ownership check. See the media-service README for upload failure and cleanup behavior.
 
 ## Compose files

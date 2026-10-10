@@ -21,7 +21,3 @@ jwt:
   private-key: file:${JWT_PRIVATE_KEY_PATH}
   public-key: file:${JWT_PUBLIC_KEY_PATH}
   expiration: ${JWT_EXPIRATION:24h}
-
-media:
-  service:
-    base-url: ${MEDIA_SERVICE_BASE_URL}

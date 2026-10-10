@@ -52,6 +52,15 @@ class AuthControllerTest {
     }
 
     @Test
+    void oversizedPasswordIs400AndUnsupportedContentTypeIs415() throws Exception {
+        RegisterRequest request = new RegisterRequest("testuser", "test@test.com", "a".repeat(73), Role.CLIENT);
+        mockMvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))).andExpect(status().isBadRequest());
+        mockMvc.perform(post("/auth/register").contentType(MediaType.TEXT_PLAIN).content("invalid"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
     void register_ShouldReturn201AndAuthResponse() throws Exception {
         RegisterRequest request = new RegisterRequest("testuser", "test@test.com", "password", Role.CLIENT);
 
