@@ -6,7 +6,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,10 +16,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MediaValidationService {
 
-    private final RestClient.Builder restClientBuilder;
-
-    @Value("${media.service.base-url}")
-    private String mediaServiceBaseUrl;
+    private final RestClient mediaServiceRestClient;
 
     public void validateProductMediaReferences(String productId, List<String> mediaIds) {
         if (mediaIds == null || mediaIds.isEmpty()) {
@@ -41,9 +37,9 @@ public class MediaValidationService {
 
     private Set<String> fetchMediaIdsForProduct(String productId) {
         try {
-            ProductImagesResponse response = restClientBuilder.build()
+            ProductImagesResponse response = mediaServiceRestClient
                     .get()
-                    .uri(buildUrl("/media/images/{productId}"), productId)
+                    .uri("/media/images/{productId}", productId)
                     .retrieve()
                     .body(ProductImagesResponse.class);
 
@@ -54,19 +50,12 @@ public class MediaValidationService {
             return response.images().stream()
                     .map(MediaImageResponse::id)
                     .collect(Collectors.toSet());
-        } catch (RestClientException ex) {
+        } catch (RestClientException | IllegalStateException ex) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "Failed to validate media references",
                     ex);
         }
-    }
-
-    private String buildUrl(String path) {
-        if (mediaServiceBaseUrl.endsWith("/")) {
-            return mediaServiceBaseUrl.substring(0, mediaServiceBaseUrl.length() - 1) + path;
-        }
-        return mediaServiceBaseUrl + path;
     }
 
     private record ProductImagesResponse(String productId, List<MediaImageResponse> images) {

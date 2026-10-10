@@ -42,6 +42,16 @@ class ProductControllerTest {
         private ProductService productService;
 
         @Test
+        void unsupportedContentTypeReturns415() throws Exception {
+                var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                        .standaloneSetup(new ProductController(productService))
+                        .setControllerAdvice(new ecom.product_service.exception.GlobalExceptionHandler()).build();
+                mvc.perform(post("/products").header("X-User-Id", "seller-1")
+                        .contentType(MediaType.TEXT_PLAIN).content("invalid"))
+                        .andExpect(status().isUnsupportedMediaType());
+        }
+
+        @Test
         void getProductById_ShouldReturn200() throws Exception {
                 ProductResponse response = ProductResponse.builder()
                                 .id("prod-1")

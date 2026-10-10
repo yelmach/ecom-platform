@@ -28,11 +28,11 @@
 ## Dependencies
 - MongoDB
 - Eureka (`discovery-service`)
-- Media service (`MEDIA_SERVICE_BASE_URL`)
+- Media service (Eureka discovery)
 
 ## Configuration
 - `PRODUCT_SERVICE_PORT` (default `8082`)
-- `MONGO_*`, `EUREKA_*`, `MEDIA_SERVICE_BASE_URL`
+- `MONGO_*`, `EUREKA_*`
 
 ## Quick run
 ```bash
