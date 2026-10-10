@@ -128,7 +128,6 @@ class MediaServiceTest {
         doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
 
-        Media oldAvatar = Media.builder().id("old").ownerId("user-1").ownerType(OwnerType.AVATAR).objectKey("avatars/user-1/old.jpg").build();
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
             media.setId("new");
