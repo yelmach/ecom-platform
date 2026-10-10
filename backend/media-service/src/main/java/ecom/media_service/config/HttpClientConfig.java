@@ -16,7 +16,7 @@ public class HttpClientConfig {
     public RestClient.Builder loadBalancedRestClientBuilder() {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(2));
         return RestClient.builder().requestFactory(factory);
     }
 

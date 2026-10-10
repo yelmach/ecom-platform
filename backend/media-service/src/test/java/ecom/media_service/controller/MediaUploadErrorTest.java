@@ -20,6 +20,15 @@ import ecom.media_service.service.MediaService;
 
 class MediaUploadErrorTest {
     @Test
+    void unsupportedContentTypeReturns415() throws Exception {
+        var mvc = MockMvcBuilders.standaloneSetup(new MediaController(mock(MediaService.class)))
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/media/images")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
     void uploadErrorsHaveExpectedHttpStatusesAndResponseBodies() throws Exception {
         MediaService service = mock(MediaService.class);
         var mvc = MockMvcBuilders.standaloneSetup(new MediaController(service))

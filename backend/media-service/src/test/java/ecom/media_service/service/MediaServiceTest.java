@@ -123,13 +123,12 @@ class MediaServiceTest {
     }
 
     @Test
-    void uploadProfileImage_ShouldReplaceExistingAvatar() {
+    void uploadProfileImage_ShouldRetainExistingAvatarUntilProfileIsLinked() {
         ValidatedFile validatedFile = new ValidatedFile("abc".getBytes(), "image/jpeg", ".jpg");
         doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
 
         Media oldAvatar = Media.builder().id("old").ownerId("user-1").ownerType(OwnerType.AVATAR).objectKey("avatars/user-1/old.jpg").build();
-        when(mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, "user-1")).thenReturn(List.of(oldAvatar));
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
             media.setId("new");
@@ -139,8 +138,8 @@ class MediaServiceTest {
         ProfileImageResponse response = mediaService.uploadProfileImage("user-1", file);
 
         assertEquals("new", response.avatar().id());
-        verify(objectStorageService).delete("avatars/user-1/old.jpg");
-        verify(mediaRepository).deleteAll(List.of(oldAvatar));
+        verify(objectStorageService, never()).delete("avatars/user-1/old.jpg");
+        verify(mediaRepository, never()).deleteAll(any());
         verify(objectStorageService).upload(anyString(), any(byte[].class), eq("image/jpeg"));
     }
 
@@ -149,7 +148,6 @@ class MediaServiceTest {
         ValidatedFile validatedFile = new ValidatedFile("abc".getBytes(), "image/jpeg", ".jpg");
         doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
-        when(mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, "user-1")).thenReturn(List.of());
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
             media.setId("new");

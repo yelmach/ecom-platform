@@ -5,7 +5,7 @@
 
 ## Main endpoints
 - `POST /media/images` (multipart: `productId`, `files[]`)
-- `GET /media/images/{productId}`
+- `GET /media/images/{productId}` — product image metadata
 - `POST /media/profile` (multipart: `file`)
 - `GET /media/profile/{userId}`
 
@@ -15,11 +15,12 @@
 - Checks product ownership with product service before validating or storing files
 - Validates every file in a product batch before uploading any file
 - If a later upload or metadata save fails, earlier saved images remain; the current object is deleted on a best-effort basis and remaining files are skipped
-- Uses the same upload/save cleanup for avatars; existing avatar replacement ordering is unchanged
-- Avatar flow keeps only one active avatar per user
+- Avatar uploads save a new object and metadata without deleting the previous avatar.
+- User service validates ownership by media ID and saves the new `avatarMediaId`. Previous and unlinked avatars remain stored; replacement cleanup is deferred to a future Kafka implementation.
+- Failed upload/metadata-save cleanup for the current object remains in place.
 - Validates files:
   - JPEG and PNG only (GIF and WebP are unsupported)
-  - max 2 MB per file
+  - max 2 MB per file; 11 MB per multipart request to allow five files plus form overhead
   - detects the content type from the bytes with Apache Tika, ignoring the supplied filename and MIME header
   - verifies that ImageIO can decode the image, then preserves the original bytes
   - extensions mapped from the detected format (`jpg`, `png`)
@@ -66,3 +67,9 @@ Deploy product service's internal ownership endpoint first, then deploy media se
 cd backend/media-service
 ./mvnw spring-boot:run
 ```
+
+## Image access and internal avatar contracts
+
+`GET /media/images/{productId}` returns image metadata and object URLs. The browser loads those URLs through the gateway’s `/ecom-media/**` route directly from MinIO; media service does not stream image bytes.
+
+User service calls `GET /internal/media/avatars/{mediaId}/ownership` with `X-User-Id` before linking an avatar. There is no activation or replacement-cleanup endpoint. Old avatars remain stored until asynchronous cleanup is implemented. Internal endpoints are unavailable through the gateway. Deploy media's new endpoints before the updated user/product callers.

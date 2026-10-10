@@ -65,6 +65,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void avatarInternalRoutesAreDenied() {
+        webTestClient.get().uri("/internal/media/avatars/avatar-1/ownership").exchange().expectStatus().isUnauthorized();
+        webTestClient.get().uri("/internal/media/avatars/avatar-1/ownership")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token(SIGNING_KEY, "SELLER", Instant.now().plusSeconds(60))))
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     void protectedEndpointRejectsMissingToken() {
         webTestClient.get().uri("/products/me")
                 .exchange()

@@ -1,6 +1,5 @@
 package ecom.media_service.service;
 
-import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -42,15 +41,6 @@ public class MediaStorageService {
             cleanup(objectKey, originalFailure);
             LOGGER.error("Failed to upload or save media for object {}", objectKey, originalFailure);
             throw originalFailure;
-        }
-    }
-
-    public void delete(List<Media> assets) {
-        for (Media asset : assets) {
-            objectStorageService.delete(asset.getObjectKey());
-        }
-        if (!assets.isEmpty()) {
-            mediaRepository.deleteAll(assets);
         }
     }
 

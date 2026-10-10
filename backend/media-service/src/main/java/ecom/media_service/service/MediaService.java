@@ -2,6 +2,8 @@ package ecom.media_service.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,9 +69,6 @@ public class MediaService {
         requireNonBlank(userId, "Authenticated user is required");
         ValidatedFile validatedFile = fileValidationService.validateImage(file);
 
-        // Keep one active avatar: remove old avatar metadata and object first.
-        List<Media> existingAvatars = mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, userId);
-        mediaStorageService.delete(existingAvatars);
         Media savedAvatar = mediaStorageService.save(OwnerType.AVATAR, userId, validatedFile);
 
         return new ProfileImageResponse(toMediaImageResponse(savedAvatar));
@@ -82,6 +81,18 @@ public class MediaService {
                 .orElseThrow(() -> new MediaNotFoundException("Profile image not found"));
 
         return new ProfileImageResponse(toMediaImageResponse(avatar));
+    }
+
+    public void verifyAvatarOwnership(String mediaId, String userId) {
+        requireNonBlank(userId, "Authenticated user is required");
+        requireNonBlank(mediaId, "mediaId is required");
+
+        Media avatar = mediaRepository.findById(mediaId)
+                .orElseThrow(() -> new MediaNotFoundException("Image not found"));
+
+        if (avatar.getOwnerType() != OwnerType.AVATAR || !userId.equals(avatar.getOwnerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Avatar does not belong to the current user");
+        }
     }
 
     private void requireNonBlank(String value, String message) {
