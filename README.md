@@ -16,6 +16,7 @@ Supporting infrastructure:
 
 - MongoDB
 - MinIO (object storage)
+- Kafka (local development broker for upcoming cleanup events)
 
 Frontend:
 
@@ -123,11 +124,26 @@ The existing MinIO service name, ports, credentials, and data volume are retaine
 
 ### Infrastructure-only development
 
-1. Start infra (`mongo`, `minio`, `discovery-service`) from repo root:
+1. Start infra (`mongo`, `minio`, `discovery-service`, `kafka`) from repo root:
 
 ```bash
 make dev-infra-up
 ```
+
+To start only Kafka, run `make kafka-up`. Inspect it with `make kafka-logs`
+or list topics with `make kafka-topics`.
+
+Kafka uses the official `apache/kafka:4.1.2` image in single-node KRaft mode,
+with persistent storage and a health check. Docker services connect to
+`kafka:9092`; services running from the IDE connect to `localhost:29092`.
+Set `KAFKA_BOOTSTRAP_SERVERS` accordingly in `.env` and `.env.local` when
+adding the service producers and consumers. Topic auto-creation is disabled;
+the event integration will explicitly provision its topics.
+
+This broker is configured for local development. Cleanup producers and
+consumers, and production Kafka configuration, are not implemented yet.
+The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
+along with the other development volumes.
 
 2. Run backend services manually (each in a separate terminal):
 
