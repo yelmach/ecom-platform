@@ -35,6 +35,7 @@ Frontend:
 - `docs/jenkins-guide.md` (Jenkins setup + CI pipeline walkthrough)
 - `docs/sonarqube-guide.md` (SonarQube setup + Jenkins quality gate walkthrough)
 - `docs/ghcr-deployment-guide.md` (GHCR image deployment + rollback walkthrough)
+- `docs/kafka-events.md` (cleanup event contracts and local topic setup)
 
 ## Config files
 
@@ -133,12 +134,16 @@ make dev-infra-up
 To start only Kafka, run `make kafka-up`. Inspect it with `make kafka-logs`
 or list topics with `make kafka-topics`.
 
-Kafka uses the official `apache/kafka:4.1.2` image in single-node KRaft mode,
+Kafka uses the official `apache/kafka:4.3.1` image in single-node KRaft mode,
 with persistent storage and a health check. Docker services connect to
 `kafka:9092`; services running from the IDE connect to `localhost:29092`.
 Set `KAFKA_BOOTSTRAP_SERVERS` accordingly in `.env` and `.env.local` when
-adding the service producers and consumers. Topic auto-creation is disabled;
-the event integration will explicitly provision its topics.
+adding the service producers and consumers. Topic auto-creation is disabled.
+Product service creates `product.events.v1` and User service creates
+`user.events.v1` at application startup using Spring Kafka `NewTopic` beans.
+Existing topics are reused. Start Kafka before either application;
+startup fails if Kafka is unavailable. `make kafka-up` starts only the broker.
+See [Kafka events](docs/kafka-events.md) for the event payloads.
 
 This broker is configured for local development. Cleanup producers and
 consumers, and production Kafka configuration, are not implemented yet.
