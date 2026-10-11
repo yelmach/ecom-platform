@@ -53,9 +53,9 @@ export class Dashboard implements OnInit {
     this.productService.getMyProducts(this.currentPage(), 10).subscribe({
       next: (page) => {
         this.products.update((current) => [...current, ...page.content]);
-        this.totalProducts.set(page.totalElements);
+        this.totalProducts.set(page.page.totalElements);
         this.loadProductImageUrls(page.content);
-        this.isLast.set(page.last);
+        this.isLast.set(page.page.number + 1 >= page.page.totalPages);
         this.currentPage.update((p) => p + 1);
         this.loading.set(false);
       },

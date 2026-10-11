@@ -62,6 +62,16 @@ describe('Login Component', () => {
       expect(emailControl.errors).toBeNull();
     });
 
+    it('should match the backend password range of 6 to 72 characters', () => {
+      const password = component.loginForm.controls.password;
+      password.setValue('short');
+      expect(password.hasError('minlength')).toBeTrue();
+      password.setValue('a'.repeat(72));
+      expect(password.valid).toBeTrue();
+      password.setValue('a'.repeat(73));
+      expect(password.hasError('maxlength')).toBeTrue();
+    });
+
     it('should validate password as required', () => {
       const passwordControl = component.loginForm.controls.password;
 
@@ -108,11 +118,11 @@ describe('Login Component', () => {
       const mockClientUser = { role: 'CLIENT' } as User;
       authServiceSpy.login.and.returnValue(of(mockClientUser));
 
-      component.loginForm.setValue({ email: 'client@test.com', password: 'pw' });
+      component.loginForm.setValue({ email: 'client@test.com', password: 'password123' });
       component.onSubmit();
 
       expect(component.isSubmitting()).toBeFalse();
-      expect(authServiceSpy.login).toHaveBeenCalledWith({ email: 'client@test.com', password: 'pw' });
+      expect(authServiceSpy.login).toHaveBeenCalledWith({ email: 'client@test.com', password: 'password123' });
       expect(router.navigateByUrl).toHaveBeenCalledWith('/shop');
     });
 
@@ -120,7 +130,7 @@ describe('Login Component', () => {
       const mockSellerUser = { role: 'SELLER' } as User;
       authServiceSpy.login.and.returnValue(of(mockSellerUser));
 
-      component.loginForm.setValue({ email: 'seller@test.com', password: 'pw' });
+      component.loginForm.setValue({ email: 'seller@test.com', password: 'password123' });
       component.onSubmit();
 
       expect(authServiceSpy.login).toHaveBeenCalled();
@@ -134,7 +144,7 @@ describe('Login Component', () => {
       });
       authServiceSpy.login.and.returnValue(throwError(() => errorResponse));
 
-      component.loginForm.setValue({ email: 'bad@test.com', password: 'pw' });
+      component.loginForm.setValue({ email: 'bad@test.com', password: 'password123' });
       component.onSubmit();
 
       expect(component.fieldErrors()['email']).toBe('Email not found');
@@ -149,7 +159,7 @@ describe('Login Component', () => {
       });
       authServiceSpy.login.and.returnValue(throwError(() => errorResponse));
 
-      component.loginForm.setValue({ email: 'test@test.com', password: 'wrong' });
+      component.loginForm.setValue({ email: 'test@test.com', password: 'wrongpassword' });
       component.onSubmit();
 
       expect(component.submitError()).toBe('Invalid credentials');
@@ -162,7 +172,7 @@ describe('Login Component', () => {
       });
       authServiceSpy.login.and.returnValue(throwError(() => errorResponse));
 
-      component.loginForm.setValue({ email: 'test@test.com', password: 'pw' });
+      component.loginForm.setValue({ email: 'test@test.com', password: 'password123' });
       component.onSubmit();
 
       expect(component.submitError()).toBe('Internal Server Error');

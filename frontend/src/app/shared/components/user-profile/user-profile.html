@@ -15,12 +15,12 @@
       }
     </div>
     <div class="avatar-actions">
-      <button mat-button type="button" (click)="avatarInput.click()">
+      <button mat-button type="button" [disabled]="isSubmitting()" (click)="avatarInput.click()">
         <mat-icon>photo_camera</mat-icon>
         Change
       </button>
-      @if (avatarPreview()) {
-        <button mat-button type="button" class="remove-avatar" (click)="removeAvatar()">
+      @if (avatarPreview() || (user.avatarMediaId && !avatarRemoved())) {
+        <button mat-button type="button" class="remove-avatar" [disabled]="isSubmitting()" (click)="removeAvatar()">
           <mat-icon>delete</mat-icon>
           Remove
         </button>
@@ -30,7 +30,8 @@
       #avatarInput
       type="file"
       hidden
-      accept="image/png,image/jpeg,image/gif"
+      accept="image/png,image/jpeg"
+      [disabled]="isSubmitting()"
       (change)="onAvatarSelected($event)"
     />
   </div>

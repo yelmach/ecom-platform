@@ -14,6 +14,11 @@
     "secure": false,
     "changeOrigin": true
   },
+  "/ecom-media": {
+    "target": "https://localhost:8443",
+    "secure": false,
+    "changeOrigin": true
+  },
   "/media": {
     "target": "https://localhost:8443",
     "secure": false,

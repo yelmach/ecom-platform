@@ -31,13 +31,14 @@ export class Header {
         return;
       }
 
+      this.avatarUrl.set(null);
       const subscription = this.mediaService.getProfile(user.userId).pipe(
         catchError(() => {
           this.avatarUrl.set(null);
           return of(null);
         }),
       ).subscribe((profile) => {
-        this.avatarUrl.set(profile?.avatar?.url ?? null);
+        this.avatarUrl.set(profile?.avatar?.id === user.avatarMediaId ? profile.avatar.url : null);
       });
 
       onCleanup(() => subscription.unsubscribe());

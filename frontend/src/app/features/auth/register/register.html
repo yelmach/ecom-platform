@@ -41,7 +41,7 @@
               <button type="button" class="upload-link" (click)="avatarInput.click()">
                 Upload image
               </button>
-              <span class="upload-hint">PNG/JPG/GIF/WEBP up to 2MB</span>
+              <span class="upload-hint">PNG/JPG up to 2MB</span>
               @if (avatarPreview()) {
                 <button type="button" class="upload-link" (click)="clearAvatar()">Remove</button>
               }
@@ -50,7 +50,7 @@
               #avatarInput
               type="file"
               hidden
-              accept="image/png,image/jpeg,image/gif,image/webp"
+              accept="image/png,image/jpeg"
               (change)="onAvatarSelected($event)"
             />
           </div>

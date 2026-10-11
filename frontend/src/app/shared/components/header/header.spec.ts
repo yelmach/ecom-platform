@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, flush } from '@angular/core/testi
 import { provideRouter } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { Header } from './header';
 import { AuthService } from '../../../core/services/auth.service';
@@ -91,6 +91,29 @@ describe('Header Component', () => {
 
       expect(mediaServiceSpy.getProfile).toHaveBeenCalledWith('user-1');
       expect(component.avatarUrl()).toBe('http://example.com/avatar.jpg');
+    }));
+
+    it('should not display an uploaded avatar that is not saved on the user profile', fakeAsync(() => {
+      mediaServiceSpy.getProfile.and.returnValue(of(mockProfileResponse));
+      authServiceSpy.currentUser.set({ ...mockUser, avatarMediaId: 'previous-avatar' });
+      fixture.detectChanges();
+      flush();
+      expect(component.avatarUrl()).toBeNull();
+    }));
+
+    it('should clear the previous user avatar while a different user avatar is loading', fakeAsync(() => {
+      const pending = new Subject<ProfileImageResponse>();
+      mediaServiceSpy.getProfile.and.returnValues(of(mockProfileResponse), pending);
+      authServiceSpy.currentUser.set({ ...mockUser, avatarMediaId: 'media-1' });
+      fixture.detectChanges();
+      flush();
+      expect(component.avatarUrl()).toBe('http://example.com/avatar.jpg');
+      authServiceSpy.currentUser.set({ ...mockUser, userId: 'user-2', avatarMediaId: 'media-2' });
+      fixture.detectChanges();
+      flush();
+      expect(component.avatarUrl()).toBeNull();
+      pending.next({ avatar: { id: 'media-2', url: 'other-avatar.png' } });
+      expect(component.avatarUrl()).toBe('other-avatar.png');
     }));
 
     it('should handle getProfile API error gracefully and set avatarUrl to null', fakeAsync(() => {

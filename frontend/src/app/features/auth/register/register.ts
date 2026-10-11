@@ -41,7 +41,7 @@ export class Register {
         Validators.required,
         Validators.minLength(4),
         Validators.maxLength(15),
-        Validators.pattern(/^[a-zA-Z0-9\s]+$/),
+        Validators.pattern(/^[a-zA-Z0-9]+$/),
       ],
     }),
     email: new FormControl('', {
@@ -50,7 +50,7 @@ export class Register {
     }),
     password: new FormControl('', {
       nonNullable: true,
-      validators: [Validators.required, Validators.minLength(6)],
+      validators: [Validators.required, Validators.minLength(6), Validators.maxLength(72)],
     }),
   });
 
@@ -130,14 +130,14 @@ export class Register {
       return;
     }
 
-    if (!file.type.startsWith('image/')) {
-      this.submitError.set('Avatar must be an image file.');
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      this.submitError.set('Avatar must be a JPEG or PNG image.');
       input.value = '';
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      this.submitError.set('Avatar must be 2 MB or less.');
+    if (file.size === 0 || file.size > 2 * 1024 * 1024) {
+      this.submitError.set('Avatar must be non-empty and 2 MB or less.');
       input.value = '';
       return;
     }
@@ -195,7 +195,7 @@ export class Register {
   }
 
   private handleSubmitError(error: HttpErrorResponse): void {
-    if (error.error?.details) {
+    if (error.error?.details && Object.keys(error.error.details).length > 0) {
       const details = error.error.details;
       this.fieldErrors.set(details);
 

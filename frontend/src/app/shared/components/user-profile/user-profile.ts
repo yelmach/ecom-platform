@@ -6,7 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { finalize, switchMap } from 'rxjs';
+import { finalize, switchMap, tap } from 'rxjs';
 import { User, UpdateUserRequest } from '../../../core/models/user';
 import { UserService } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -40,11 +40,12 @@ export class ProfileDialog implements OnInit {
   readonly avatarPreview = signal<string | null>(null);
   readonly avatarRemoved = signal(false);
   private avatarFile: File | null = null;
+  private uploadedAvatarId: string | null = null;
 
   readonly profileForm = new FormGroup({
     username: new FormControl(this.user.username, {
       nonNullable: true,
-      validators: [Validators.required, Validators.minLength(4), Validators.maxLength(15)],
+      validators: [Validators.required, Validators.minLength(4), Validators.maxLength(15), Validators.pattern(/^[a-zA-Z0-9]+$/)],
     }),
     email: new FormControl(this.user.email, {
       nonNullable: true,
@@ -52,7 +53,7 @@ export class ProfileDialog implements OnInit {
     }),
     password: new FormControl('', {
       nonNullable: true,
-      validators: [Validators.minLength(6), Validators.maxLength(100)],
+      validators: [Validators.minLength(6), Validators.maxLength(72)],
     }),
   });
 
@@ -62,8 +63,16 @@ export class ProfileDialog implements OnInit {
     }
 
     this.mediaService.getProfile(this.user.userId).subscribe({
-      next: (profile) => this.avatarPreview.set(profile.avatar.url),
-      error: () => this.avatarPreview.set(null),
+      next: (profile) => {
+        if (!this.avatarFile && !this.uploadedAvatarId && !this.avatarRemoved()) {
+          this.avatarPreview.set(profile.avatar.id === this.user.avatarMediaId ? profile.avatar.url : null);
+        }
+      },
+      error: () => {
+        if (!this.avatarFile && !this.uploadedAvatarId && !this.avatarRemoved()) {
+          this.avatarPreview.set(null);
+        }
+      },
     });
   }
 
@@ -72,37 +81,42 @@ export class ProfileDialog implements OnInit {
   }
 
   onAvatarSelected(event: Event): void {
+    if (this.isSubmitting()) return;
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) {
       return;
     }
 
-    if (!file.type.startsWith('image/')) {
-      this.submitError.set('Avatar must be an image file.');
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      this.submitError.set('Avatar must be a JPEG or PNG image.');
       input.value = '';
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      this.submitError.set('Avatar must be 2 MB or less.');
+    if (file.size === 0 || file.size > 2 * 1024 * 1024) {
+      this.submitError.set('Avatar must be non-empty and 2 MB or less.');
       input.value = '';
       return;
     }
 
     this.avatarFile = file;
+    this.uploadedAvatarId = null;
     this.avatarPreview.set(URL.createObjectURL(file));
     this.avatarRemoved.set(false);
     input.value = '';
   }
 
   removeAvatar(): void {
+    if (this.isSubmitting()) return;
     this.avatarFile = null;
+    this.uploadedAvatarId = null;
     this.avatarPreview.set(null);
     this.avatarRemoved.set(true);
   }
 
   onSubmit(): void {
+    if (this.isSubmitting()) return;
     this.fieldErrors.set({});
     this.submitError.set('');
 
@@ -124,6 +138,8 @@ export class ProfileDialog implements OnInit {
     }
     if (this.avatarRemoved()) {
       payload.avatarMediaId = null;
+    } else if (this.uploadedAvatarId) {
+      payload.avatarMediaId = this.uploadedAvatarId;
     }
 
     const hasAvatarUpload = !!this.avatarFile;
@@ -136,6 +152,11 @@ export class ProfileDialog implements OnInit {
 
     const request$ = hasAvatarUpload
       ? this.mediaService.uploadProfile(this.avatarFile!).pipe(
+        tap((profile) => {
+          this.uploadedAvatarId = profile.avatar.id;
+          this.avatarFile = null;
+          this.avatarPreview.set(profile.avatar.url);
+        }),
         switchMap((profile) => {
           payload.avatarMediaId = profile.avatar.id;
           return this.userService.updateProfile(payload);
@@ -172,6 +193,9 @@ export class ProfileDialog implements OnInit {
     if (errors['required']) {
       return `${fieldName} is required`;
     }
+    if (errors['pattern']) {
+      return 'Only letters and numbers are allowed';
+    }
     if (errors['email']) {
       return 'Enter a valid email';
     }
@@ -186,7 +210,7 @@ export class ProfileDialog implements OnInit {
   }
 
   private handleSubmitError(error: HttpErrorResponse): void {
-    if (error.error?.details) {
+    if (error.error?.details && Object.keys(error.error.details).length > 0) {
       const details = error.error.details;
       this.fieldErrors.set(details);
 
