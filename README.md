@@ -116,6 +116,11 @@ make dev-up
 
 Stop the stack with `make dev-down`, or use `make dev-down-v` to also remove volumes.
 
+Both Compose files use the pinned community build `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`.
+The previously configured `quay.io/minio/minio:latest` image is no longer publicly pullable.
+This replacement is published by [PGSTY](https://github.com/pgsty/silo/tree/minio), an independent MinIO fork; upstream MinIO now documents [source-only distribution](https://github.com/minio/minio#source-only-distribution).
+The existing MinIO service name, ports, credentials, and data volume are retained.
+
 ### Infrastructure-only development
 
 1. Start infra (`mongo`, `minio`, `discovery-service`) from repo root:

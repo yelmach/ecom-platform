@@ -38,6 +38,12 @@ class HttpClientConfigTest {
             exchange.getResponseBody().write(body);
             exchange.close();
         });
+        AtomicInteger directRequests = new AtomicInteger();
+        product.createContext("/eureka/apps", exchange -> {
+            directRequests.incrementAndGet();
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
         product.start();
         AtomicReference<List<ServiceInstance>> instances = new AtomicReference<>(List.of(
                 new DefaultServiceInstance("media-1", "media-service", "127.0.0.1",
@@ -72,6 +78,14 @@ class HttpClientConfigTest {
                     .withBean(DiscoveryClient.class, () -> discovery)
                     .run(context -> {
                         assertThat(context).hasNotFailed();
+                        // An unqualified builder (as used by Eureka) must bypass discovery.
+                        RestClient.Builder directBuilder = context.getBean(RestClient.Builder.class);
+                        assertThat(directBuilder).isSameAs(context.getBean("restClientBuilder"));
+                        directBuilder.clone().build().get()
+                                .uri("http://127.0.0.1:" + product.getAddress().getPort() + "/eureka/apps")
+                                .retrieve().toBodilessEntity();
+                        assertThat(directRequests.get()).isEqualTo(1);
+
                         MediaValidationService service = new MediaValidationService(
                                 context.getBean("mediaServiceRestClient", RestClient.class));
                         service.validateProductMediaReferences("prod-1", List.of("m1"));
