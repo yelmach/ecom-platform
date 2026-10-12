@@ -2,6 +2,7 @@ package ecom.product_service.service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -77,6 +78,7 @@ public class ProductService {
         checkOwnership(existingProduct, sellerId);
 
         Update update = new Update().set("updatedAt", Instant.now());
+        List<String> removedMediaIds = List.of();
 
         if (request.getName() != null) {
             update.set("name", request.getName());
@@ -92,6 +94,10 @@ public class ProductService {
         }
         if (request.getMediaIds() != null) {
             mediaValidationService.validateProductMediaReferences(id, request.getMediaIds());
+            removedMediaIds = existingProduct.getMediaIds().stream()
+                    .filter(mediaId -> !request.getMediaIds().contains(mediaId))
+                    .distinct()
+                    .toList();
             update.set("mediaIds", request.getMediaIds());
         }
 
@@ -102,6 +108,10 @@ public class ProductService {
 
         if (saved == null) {
             throw new ProductNotFoundException(id);
+        }
+
+        if (!removedMediaIds.isEmpty()) {
+            productEventProducer.publishProductImagesDetached(id, removedMediaIds);
         }
 
         return ProductResponse.fromEntity(saved);

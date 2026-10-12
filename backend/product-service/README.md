@@ -28,6 +28,9 @@
 - A publish failure is logged and deletion still returns `204`;
   cleanup is not queued for application-level replay. See `docs/kafka-events.md`.
 - Conditional updates prevent a stale edit from recreating a deleted product.
+- Successful image-list updates publish `PRODUCT_IMAGES_DETACHED` for removed
+  IDs only. Reordering and additions emit nothing; publishing failures are logged
+  and the successful update still returns `200`.
 - Requires `mediaIds` to be empty on create
 - Validates updated `mediaIds` against `GET /media/images/{productId}` in `media-service`
 

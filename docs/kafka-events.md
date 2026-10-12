@@ -72,7 +72,29 @@ The seven-day Kafka retention bounds recovery when Media has never consumed a
 deletion event. A cleanup failure delays subsequent records in that partition
 while retries run; consumption continues after success or retry exhaustion.
 
-Avatar and detached-image events remain planned; their producers and consumers
-are not implemented in this change.
+## Detached product images (implemented)
+
+When a successful `PUT /products/{id}` supplies `mediaIds`, product service
+compares the previous list with the new list and publishes
+`PRODUCT_IMAGES_DETACHED` on `product.events` for removed IDs only. Clearing
+the list removes all previous references. An omitted list, additions, unchanged
+references, and reordering emit no cleanup event. The record key is the product ID.
+
+The event payload is `{"productId":"...","mediaIds":["removed-image-id"]}`.
+Publication uses the same acknowledgment wait as product deletion. Failures are
+logged and the successful update still returns `200`; no replay is queued.
+
+Media service validates the event and deletes only listed images whose owner
+type is `PRODUCT` and owner ID matches the product. Missing images are skipped,
+making duplicate delivery safe. MinIO deletion happens before metadata deletion;
+failures use the same three-retry policy. This handler never deletes a whole
+product prefix, so remaining and unlinked images are preserved.
+
+This simple flow assumes image-list edits are sequential. Concurrent edits or
+reattaching an image before its cleanup event is processed can leave stale
+references or delete a reattached image; no locking or reattachment protection
+is implemented.
+
+Avatar events remain planned; their producer and consumer are not implemented.
 
 Reference: [Spring Kafka topic configuration](https://docs.spring.io/spring-kafka/reference/kafka/configuring-topics.html).

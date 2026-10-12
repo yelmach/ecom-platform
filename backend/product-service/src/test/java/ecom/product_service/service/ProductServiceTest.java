@@ -181,6 +181,52 @@ class ProductServiceTest {
         assertEquals(7, response.getQuantity());
         assertEquals(List.of("m2", "m3"), response.getMediaIds());
         verify(mediaValidationService).validateProductMediaReferences("prod-1", List.of("m2", "m3"));
+        verify(productEventProducer).publishProductImagesDetached("prod-1", List.of("m1"));
+    }
+
+    @Test
+    void clearingImagesPublishesAllRemovedIdsAfterUpdate() {
+        product.setMediaIds(List.of("m1", "m2"));
+        var request = new ProductUpdateRequest();
+        request.setMediaIds(List.of());
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        when(mongoTemplate.findAndModify(any(org.springframework.data.mongodb.core.query.Query.class),
+                any(org.springframework.data.mongodb.core.query.Update.class),
+                any(org.springframework.data.mongodb.core.FindAndModifyOptions.class), eq(Product.class)))
+                .thenReturn(product);
+        productService.updateProduct("prod-1", request, "seller-1");
+        var order = org.mockito.Mockito.inOrder(mongoTemplate, productEventProducer);
+        order.verify(mongoTemplate).findAndModify(any(org.springframework.data.mongodb.core.query.Query.class),
+                any(org.springframework.data.mongodb.core.query.Update.class),
+                any(org.springframework.data.mongodb.core.FindAndModifyOptions.class), eq(Product.class));
+        order.verify(productEventProducer).publishProductImagesDetached("prod-1", List.of("m1", "m2"));
+    }
+
+    @Test
+    void keepingReorderingOrAddingImagesDoesNotPublishCleanup() {
+        product.setMediaIds(List.of("m1", "m2"));
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        when(mongoTemplate.findAndModify(any(org.springframework.data.mongodb.core.query.Query.class),
+                any(org.springframework.data.mongodb.core.query.Update.class),
+                any(org.springframework.data.mongodb.core.FindAndModifyOptions.class), eq(Product.class)))
+                .thenReturn(product);
+        for (var images : List.of(List.of("m1", "m2"), List.of("m2", "m1"), List.of("m1", "m2", "m3"))) {
+            var request = new ProductUpdateRequest();
+            request.setMediaIds(images);
+            productService.updateProduct("prod-1", request, "seller-1");
+        }
+        productService.updateProduct("prod-1", new ProductUpdateRequest(), "seller-1");
+        org.mockito.Mockito.verifyNoInteractions(productEventProducer);
+    }
+
+    @Test
+    void failedImageUpdateDoesNotPublishCleanup() {
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        var request = new ProductUpdateRequest();
+        request.setMediaIds(List.of());
+        assertThrows(ProductNotFoundException.class,
+                () -> productService.updateProduct("prod-1", request, "seller-1"));
+        org.mockito.Mockito.verifyNoInteractions(productEventProducer);
     }
 
     @Test

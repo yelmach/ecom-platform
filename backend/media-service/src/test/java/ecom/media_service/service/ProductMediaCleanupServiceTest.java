@@ -45,4 +45,31 @@ class MediaCleanupServiceTest {
         verify(storage, never()).delete(anyString());
     }
 
+    @Test
+    void detachedCleanupDeletesOnlyListedImagesOwnedByProduct() {
+        when(media.findById("m")).thenReturn(java.util.Optional.of(image));
+        when(media.findById("avatar")).thenReturn(java.util.Optional.of(
+                Media.builder().id("avatar").ownerType(OwnerType.AVATAR).ownerId("p").build()));
+        when(media.findById("other")).thenReturn(java.util.Optional.of(
+                Media.builder().id("other").ownerType(OwnerType.PRODUCT).ownerId("other-product").build()));
+        when(media.findById("missing")).thenReturn(java.util.Optional.empty());
+        service.handleProductImagesDetached("p", List.of("m", "avatar", "other", "missing"));
+        var order = inOrder(storage, media);
+        order.verify(storage).delete(image.getObjectKey());
+        order.verify(media).deleteById("m");
+        verify(media, never()).deleteById("avatar");
+        verify(media, never()).deleteById("other");
+        verify(storage, never()).deleteByPrefix(anyString());
+    }
+
+    @Test
+    void detachedStorageFailureKeepsMetadataAndCanBeRetried() {
+        when(media.findById("m")).thenReturn(java.util.Optional.of(image));
+        doThrow(new IllegalStateException("offline")).doNothing().when(storage).delete(image.getObjectKey());
+        assertThrows(IllegalStateException.class, () -> service.handleProductImagesDetached("p", List.of("m")));
+        verify(media, never()).deleteById("m");
+        service.handleProductImagesDetached("p", List.of("m"));
+        verify(media).deleteById("m");
+    }
+
 }

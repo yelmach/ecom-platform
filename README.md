@@ -147,7 +147,7 @@ See [Kafka events](docs/kafka-events.md) for the event payloads.
 
 Product deletion publishing and Media cleanup are implemented. Production
 Compose also includes a single broker accessible on the backend network.
-Avatar replacement and detached-image cleanup remain planned.
+Detached-image cleanup is implemented; avatar replacement cleanup remains planned.
 The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
 along with the other development volumes.
 

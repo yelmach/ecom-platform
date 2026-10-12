@@ -19,6 +19,8 @@
   failures receive three retries five seconds apart, then are logged and skipped;
   duplicate events are safe. Failed cleanup may leave images behind.
 - Uploads already in progress can finish after deletion cleanup and leave images behind.
+- Consumes `PRODUCT_IMAGES_DETACHED` and deletes only listed images belonging
+  to that product. Missing images are skipped; retained images and avatars are preserved.
 - Product upload limit: max 5 files per request
 - Checks product ownership with product service before validating or storing files
 - Validates every file in a product batch before uploading any file
@@ -44,7 +46,7 @@
 
 ## Code organization
 
-Controllers handle HTTP requests and `MediaService` coordinates product and avatar workflows. `FileValidationService` validates images; `ProductOwnershipService` calls product service through Eureka. `MediaStorageService` uploads bytes, saves metadata, and cleans up the current object on failure. `ProductEventConsumer` receives deletion events and `MediaCleanupService` deletes product images. `storage/` contains the MinIO implementation, while `MediaUrlBuilder` builds response URLs.
+Controllers handle HTTP requests and `MediaService` coordinates product and avatar workflows. `FileValidationService` validates images; `ProductOwnershipService` calls product service through Eureka. `MediaStorageService` uploads bytes, saves metadata, and cleans up the current object on failure. `ProductEventConsumer` receives product deletion and detached-image events and `MediaCleanupService` deletes their images. `storage/` contains the MinIO implementation, while `MediaUrlBuilder` builds response URLs.
 
 Configuration stays in `config/`: `MediaProperties` binds and validates settings, `MinioConfig` creates the client, `MinioBucketInitializer` prepares the bucket and its policy, and `HttpClientConfig` creates the load-balanced product client.
 

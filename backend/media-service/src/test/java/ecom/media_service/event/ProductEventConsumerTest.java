@@ -47,7 +47,7 @@ class ProductEventConsumerTest {
 
     @Test
     void otherEventTypesAreIgnored() {
-        listener.onProductEvent(record("p", event.replace("PRODUCT_DELETED", "PRODUCT_IMAGES_DETACHED")));
+        listener.onProductEvent(record("p", event.replace("PRODUCT_DELETED", "PRODUCT_CREATED")));
         verifyNoInteractions(cleanup);
     }
 
@@ -57,5 +57,34 @@ class ProductEventConsumerTest {
         doThrow(failure).when(cleanup).handleProductDeleted("p");
         assertSame(failure, assertThrows(IllegalStateException.class,
                 () -> listener.onProductEvent(record("p", event))));
+    }
+
+    private String detachedEvent(String images) {
+        return event.replace("PRODUCT_DELETED", "PRODUCT_IMAGES_DETACHED")
+                .replace("\"productId\":\"p\"", "\"productId\":\"p\",\"mediaIds\":" + images);
+    }
+
+    @Test
+    void detachedImagesCallTargetedCleanup() {
+        listener.onProductEvent(record("p", detachedEvent("[\"m1\",\"m2\"]")));
+        verify(cleanup).handleProductImagesDetached("p", java.util.List.of("m1", "m2"));
+        verify(cleanup, never()).handleProductDeleted(anyString());
+    }
+
+    @Test
+    void invalidDetachedImageListsCannotDeleteMedia() {
+        for (String images : new String[] { "null", "[]", "\"m1\"", "[\"\"]", "[42]" }) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> listener.onProductEvent(record("p", detachedEvent(images))));
+        }
+        verifyNoInteractions(cleanup);
+    }
+
+    @Test
+    void detachedCleanupFailureEscapesForRetry() {
+        var failure = new IllegalStateException("storage offline");
+        doThrow(failure).when(cleanup).handleProductImagesDetached("p", java.util.List.of("m1"));
+        assertSame(failure, assertThrows(IllegalStateException.class,
+                () -> listener.onProductEvent(record("p", detachedEvent("[\"m1\"]")))));
     }
 }

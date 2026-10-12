@@ -2,6 +2,8 @@ package ecom.media_service.event;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -23,6 +25,8 @@ public class ProductEventConsumer {
     public void onProductEvent(ConsumerRecord<String, String> record) {
 
         String productId;
+        String eventType;
+        List<String> mediaIds = new ArrayList<>();
 
         try {
             JsonNode event = jsonMapper.readTree(record.value());
@@ -30,8 +34,8 @@ public class ProductEventConsumer {
                 throw new IllegalArgumentException("Event must be an object");
             }
 
-            String eventType = event.path("eventType").asString();
-            if (!"PRODUCT_DELETED".equals(eventType)) {
+            eventType = event.path("eventType").asString();
+            if (!"PRODUCT_DELETED".equals(eventType) && !"PRODUCT_IMAGES_DETACHED".equals(eventType)) {
                 return;
             }
 
@@ -45,9 +49,25 @@ public class ProductEventConsumer {
             if (!productId.equals(record.key())) {
                 throw new IllegalArgumentException("Product event key does not match payload");
             }
+            if ("PRODUCT_IMAGES_DETACHED".equals(eventType)) {
+                JsonNode images = event.path("payload").path("mediaIds");
+                if (!images.isArray() || images.isEmpty()) {
+                    throw new IllegalArgumentException("mediaIds must be a non-empty array");
+                }
+                for (JsonNode image : images) {
+                    if (!image.isString() || image.asString().isBlank()) {
+                        throw new IllegalArgumentException("mediaIds must contain non-blank strings");
+                    }
+                    mediaIds.add(image.asString());
+                }
+            }
         } catch (RuntimeException ex) {
-            throw new IllegalArgumentException("Invalid product deletion event", ex);
+            throw new IllegalArgumentException("Invalid product cleanup event", ex);
         }
-        cleanupService.handleProductDeleted(productId);
+        if ("PRODUCT_DELETED".equals(eventType)) {
+            cleanupService.handleProductDeleted(productId);
+        } else {
+            cleanupService.handleProductImagesDetached(productId, mediaIds);
+        }
     }
 }

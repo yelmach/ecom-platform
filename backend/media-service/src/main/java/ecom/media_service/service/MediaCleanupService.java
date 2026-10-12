@@ -1,5 +1,7 @@
 package ecom.media_service.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 
 import ecom.media_service.model.OwnerType;
@@ -22,4 +24,15 @@ public class MediaCleanupService {
         objectStorageService.deleteByPrefix("products/" + productId + "/");
     }
 
+    public void handleProductImagesDetached(String productId, List<String> mediaIds) {
+        for (String mediaId : mediaIds) {
+            var media = mediaRepository.findById(mediaId).orElse(null);
+            if (media == null || media.getOwnerType() != OwnerType.PRODUCT
+                    || !productId.equals(media.getOwnerId())) {
+                continue;
+            }
+            objectStorageService.delete(media.getObjectKey());
+            mediaRepository.deleteById(media.getId());
+        }
+    }
 }

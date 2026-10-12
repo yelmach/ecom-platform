@@ -43,4 +43,24 @@ class ProductEventProducerTest {
                 .thenThrow(new IllegalStateException("producer unavailable"));
         assertDoesNotThrow(() -> publisher.publishProductDeleted("p"));
     }
+
+    @Test
+    void publishesDetachedIdsWithProductKey() {
+        when(kafka.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        publisher.publishProductImagesDetached("p", java.util.List.of("m1", "m2"));
+        var message = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(kafka).send(eq("product.events"), eq("p"), message.capture());
+        var event = mapper.readValue(message.getValue(), ProductImagesDetachedEvent.class);
+        assertEquals("PRODUCT_IMAGES_DETACHED", event.eventType());
+        assertEquals("p", event.payload().productId());
+        assertEquals(java.util.List.of("m1", "m2"), event.payload().mediaIds());
+    }
+
+    @Test
+    void failedDetachedPublicationDoesNotFailUpdate() {
+        when(kafka.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker offline")));
+        assertDoesNotThrow(() -> publisher.publishProductImagesDetached("p", java.util.List.of("m1")));
+    }
 }
