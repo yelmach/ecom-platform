@@ -1,5 +1,4 @@
 services:
-  # Local development broker (KRaft: no ZooKeeper).
   kafka:
     image: apache/kafka:4.3.1
     container_name: ecom-kafka
@@ -124,6 +123,8 @@ services:
     env_file:
       - ./.env
     depends_on:
+      kafka:
+        condition: service_healthy
       mongo:
         condition: service_healthy
       minio:

@@ -25,7 +25,7 @@ class InternalProductControllerTest {
     @BeforeEach
     void setUp() {
         repository = mock(ProductRepository.class);
-        ProductService service = new ProductService(repository, mock(MediaValidationService.class));
+        ProductService service = new ProductService(repository, mock(MediaValidationService.class), mock(org.springframework.data.mongodb.core.MongoTemplate.class), mock(ecom.product_service.event.ProductEventProducer.class));
         mvc = MockMvcBuilders.standaloneSetup(new InternalProductController(service))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
     }

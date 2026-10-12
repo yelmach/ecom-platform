@@ -11,7 +11,7 @@ public class KafkaTopicConfig {
 
     @Bean
     public NewTopic productEventsTopic() {
-        return TopicBuilder.name("product.events.v1")
+        return TopicBuilder.name("product.events")
                 .partitions(1)
                 .replicas(1)
                 .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)

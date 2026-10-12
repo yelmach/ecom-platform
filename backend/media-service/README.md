@@ -1,16 +1,24 @@
 # Media Service
 
 ## Purpose
+
 `media-service` handles image uploads and media metadata for product images and user avatars.
 
 ## Main endpoints
+
 - `POST /media/images` (multipart: `productId`, `files[]`)
 - `GET /media/images/{productId}` — product image metadata
 - `POST /media/profile` (multipart: `file`)
 - `GET /media/profile/{userId}`
 
 ## Core behavior
+
 - Stores binary objects in MinIO and metadata in MongoDB
+- Consumes `PRODUCT_DELETED` from Kafka and removes all product-owned objects and
+  metadata, including unlinked uploads. Objects are deleted before metadata;
+  failures receive three retries five seconds apart, then are logged and skipped;
+  duplicate events are safe. Failed cleanup may leave images behind.
+- Uploads already in progress can finish after deletion cleanup and leave images behind.
 - Product upload limit: max 5 files per request
 - Checks product ownership with product service before validating or storing files
 - Validates every file in a product batch before uploading any file
@@ -27,18 +35,21 @@
 - Initializes MinIO bucket and applies public-read object policy
 
 ## Dependencies
+
 - MongoDB
+- Kafka (`KAFKA_BOOTSTRAP_SERVERS`); consumes `product.events`, created by product service at startup
 - MinIO
 - Eureka (`discovery-service`)
 - Product service (internal ownership check; discovered through Eureka and reached without the gateway)
 
 ## Code organization
 
-The existing folders are retained. Controllers handle HTTP requests and `MediaService` coordinates product and avatar workflows. `FileValidationService` validates individual images or an entire batch; `ProductOwnershipService` calls product service through Eureka. `MediaStorageService` generates object keys, uploads bytes, saves metadata, and cleans up the current object on failure. It also deletes old avatar objects and metadata. `storage/` contains the storage interface and its MinIO implementation, while `MediaUrlBuilder` builds response URLs.
+Controllers handle HTTP requests and `MediaService` coordinates product and avatar workflows. `FileValidationService` validates images; `ProductOwnershipService` calls product service through Eureka. `MediaStorageService` uploads bytes, saves metadata, and cleans up the current object on failure. `ProductEventConsumer` receives deletion events and `MediaCleanupService` deletes product images. `storage/` contains the MinIO implementation, while `MediaUrlBuilder` builds response URLs.
 
 Configuration stays in `config/`: `MediaProperties` binds and validates settings, `MinioConfig` creates the client, `MinioBucketInitializer` prepares the bucket and its policy, and `HttpClientConfig` creates the load-balanced product client.
 
 ## Configuration
+
 - `MEDIA_SERVICE_PORT` (default `8083`)
 - `MONGO_*`, `EUREKA_*`
 - `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET`
@@ -63,6 +74,7 @@ Rejected ownership checks and invalid batches create no objects or metadata. A s
 Deploy product service's internal ownership endpoint first, then deploy media service. Product must be registered in Eureka before ownership checks can succeed. `PRODUCT_SERVICE_BASE_URL` is no longer used and can be removed from existing environment files. Keep `/internal/**` inaccessible through the gateway and product service on the trusted backend network.
 
 ## Quick run
+
 ```bash
 cd backend/media-service
 ./mvnw spring-boot:run

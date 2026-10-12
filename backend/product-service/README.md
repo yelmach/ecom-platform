@@ -22,6 +22,12 @@
 ## Core behavior
 - Uses pagination for listing
 - Enforces ownership checks on update/delete
+- Physically deletes products and directly publishes `PRODUCT_DELETED` to Kafka.
+  Waits for the publish attempt and returns `204` once the product is deleted.
+  No outbox or pending-event storage.
+- A publish failure is logged and deletion still returns `204`;
+  cleanup is not queued for application-level replay. See `docs/kafka-events.md`.
+- Conditional updates prevent a stale edit from recreating a deleted product.
 - Requires `mediaIds` to be empty on create
 - Validates updated `mediaIds` against `GET /media/images/{productId}` in `media-service`
 
@@ -29,6 +35,7 @@
 - MongoDB
 - Eureka (`discovery-service`)
 - Media service (Eureka discovery)
+- Kafka (`KAFKA_BOOTSTRAP_SERVERS`); creates `product.events` at startup
 
 ## Configuration
 - `PRODUCT_SERVICE_PORT` (default `8082`)

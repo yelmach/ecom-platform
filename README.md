@@ -16,7 +16,7 @@ Supporting infrastructure:
 
 - MongoDB
 - MinIO (object storage)
-- Kafka (local development broker for upcoming cleanup events)
+- Kafka (product deletion events and asynchronous media cleanup)
 
 Frontend:
 
@@ -139,23 +139,25 @@ with persistent storage and a health check. Docker services connect to
 `kafka:9092`; services running from the IDE connect to `localhost:29092`.
 Set `KAFKA_BOOTSTRAP_SERVERS` accordingly in `.env` and `.env.local` when
 adding the service producers and consumers. Topic auto-creation is disabled.
-Product service creates `product.events.v1` and User service creates
-`user.events.v1` at application startup using Spring Kafka `NewTopic` beans.
+Product service creates `product.events` and User service creates
+`user.events` at application startup using Spring Kafka `NewTopic` beans.
 Existing topics are reused. Start Kafka before either application;
 startup fails if Kafka is unavailable. `make kafka-up` starts only the broker.
 See [Kafka events](docs/kafka-events.md) for the event payloads.
 
-This broker is configured for local development. Cleanup producers and
-consumers, and production Kafka configuration, are not implemented yet.
+Product deletion publishing and Media cleanup are implemented. Production
+Compose also includes a single broker accessible on the backend network.
+Avatar replacement and detached-image cleanup remain planned.
 The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
 along with the other development volumes.
 
-2. Run backend services manually (each in a separate terminal):
+2. Run backend services manually (each in a separate terminal). Start product
+service first so it creates the topic consumed by media service:
 
 ```bash
+cd backend/product-service && ./mvnw spring-boot:run
 cd backend/media-service && ./mvnw spring-boot:run
 cd backend/user-service && ./mvnw spring-boot:run
-cd backend/product-service && ./mvnw spring-boot:run
 cd backend/gateway-service && ./mvnw spring-boot:run
 ```
 

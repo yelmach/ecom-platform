@@ -40,6 +40,12 @@ class ProductServiceTest {
     @Mock
     private MediaValidationService mediaValidationService;
 
+    @Mock
+    private org.springframework.data.mongodb.core.MongoTemplate mongoTemplate;
+
+    @Mock
+    private ecom.product_service.event.ProductEventProducer productEventProducer;
+
     @InjectMocks
     private ProductService productService;
 
@@ -153,7 +159,19 @@ class ProductServiceTest {
         request.setMediaIds(List.of("m2", "m3"));
 
         when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mongoTemplate.findAndModify(any(org.springframework.data.mongodb.core.query.Query.class),
+                any(org.springframework.data.mongodb.core.query.Update.class),
+                any(org.springframework.data.mongodb.core.FindAndModifyOptions.class), eq(Product.class)))
+                .thenAnswer(invocation -> {
+                    var changes = ((org.springframework.data.mongodb.core.query.Update) invocation.getArgument(1))
+                            .getUpdateObject().get("$set", org.bson.Document.class);
+                    product.setName(changes.getString("name"));
+                    product.setDescription(changes.getString("description"));
+                    product.setPrice(changes.getDouble("price"));
+                    product.setQuantity(changes.getInteger("quantity"));
+                    product.setMediaIds(changes.getList("mediaIds", String.class));
+                    return product;
+                });
 
         ProductResponse response = productService.updateProduct("prod-1", request, "seller-1");
 
@@ -170,7 +188,8 @@ class ProductServiceTest {
         ProductUpdateRequest request = new ProductUpdateRequest();
         when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
 
-        assertThrows(ProductOwnershipException.class, () -> productService.updateProduct("prod-1", request, "seller-2"));
+        assertThrows(ProductOwnershipException.class,
+                () -> productService.updateProduct("prod-1", request, "seller-2"));
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -178,9 +197,16 @@ class ProductServiceTest {
     void deleteProduct_ShouldDeleteWhenOwner() {
         when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
 
+        when(mongoTemplate.findAndRemove(any(org.springframework.data.mongodb.core.query.Query.class),
+                eq(Product.class))).thenReturn(product);
+
         productService.deleteProduct("prod-1", "seller-1");
 
-        verify(productRepository).delete(product);
+        var order = org.mockito.Mockito.inOrder(mongoTemplate, productEventProducer);
+        var query = org.mockito.ArgumentCaptor.forClass(org.springframework.data.mongodb.core.query.Query.class);
+        order.verify(mongoTemplate).findAndRemove(query.capture(), eq(Product.class));
+        assertEquals("prod-1", query.getValue().getQueryObject().getString("id"));
+        order.verify(productEventProducer).publishProductDeleted("prod-1");
     }
 
     @Test
@@ -188,6 +214,48 @@ class ProductServiceTest {
         when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
 
         assertThrows(ProductOwnershipException.class, () -> productService.deleteProduct("prod-1", "seller-2"));
-        verify(productRepository, never()).delete(any(Product.class));
+        org.mockito.Mockito.verifyNoInteractions(mongoTemplate, productEventProducer);
     }
+
+    @Test
+    void concurrentDeletionCannotBeUndoneByStaleUpdate() {
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        var request = new ProductUpdateRequest();
+        request.setName("New name");
+        // The product was deleted after it was read; the conditional update matches
+        // nothing.
+        assertThrows(ProductNotFoundException.class,
+                () -> productService.updateProduct("prod-1", request, "seller-1"));
+        var query = org.mockito.ArgumentCaptor.forClass(org.springframework.data.mongodb.core.query.Query.class);
+        verify(mongoTemplate).findAndModify(query.capture(),
+                any(org.springframework.data.mongodb.core.query.Update.class),
+                any(org.springframework.data.mongodb.core.FindAndModifyOptions.class), eq(Product.class));
+        assertEquals("prod-1", query.getValue().getQueryObject().getString("id"));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void missingProductCannotProduceDeletionEvent() {
+        when(productRepository.findById("missing")).thenReturn(Optional.empty());
+        assertThrows(ProductNotFoundException.class, () -> productService.deleteProduct("missing", "seller-1"));
+        org.mockito.Mockito.verifyNoInteractions(mongoTemplate, productEventProducer);
+    }
+
+    @Test
+    void databaseDeletionFailureDoesNotPublish() {
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        org.mockito.Mockito.doThrow(new IllegalStateException("database offline"))
+                .when(mongoTemplate)
+                .findAndRemove(any(org.springframework.data.mongodb.core.query.Query.class), eq(Product.class));
+        assertThrows(IllegalStateException.class, () -> productService.deleteProduct("prod-1", "seller-1"));
+        org.mockito.Mockito.verifyNoInteractions(productEventProducer);
+    }
+
+    @Test
+    void concurrentDeletionDoesNotPublishAnExtraEvent() {
+        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
+        assertThrows(ProductNotFoundException.class, () -> productService.deleteProduct("prod-1", "seller-1"));
+        org.mockito.Mockito.verifyNoInteractions(productEventProducer);
+    }
+
 }

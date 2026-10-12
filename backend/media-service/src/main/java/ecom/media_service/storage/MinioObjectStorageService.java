@@ -9,6 +9,7 @@ import ecom.media_service.exception.StorageException;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.ListObjectsArgs;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -43,6 +44,18 @@ public class MinioObjectStorageService implements ObjectStorageService {
                             .build());
         } catch (Exception ex) {
             throw new StorageException("Failed to delete object from MinIO", ex);
+        }
+    }
+
+    @Override
+    public void deleteByPrefix(String prefix) {
+        try {
+            for (var result : minioClient.listObjects(ListObjectsArgs.builder()
+                    .bucket(mediaProperties.getMinio().getBucket()).prefix(prefix).recursive(true).build())) {
+                delete(result.get().objectName());
+            }
+        } catch (Exception ex) {
+            throw new StorageException("Failed to clean up product objects in MinIO", ex);
         }
     }
 }

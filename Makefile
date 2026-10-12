@@ -12,7 +12,7 @@ dev-down:
 	$(COMPOSE_DEV) down
 
 dev-down-v:
-	$(COMPOSE_DEV) down -vdo
+	$(COMPOSE_DEV) down -v
 
 dev-infra-up:
 	$(COMPOSE_DEV) up --build -d $(DEV_INFRA_SERVICES)
