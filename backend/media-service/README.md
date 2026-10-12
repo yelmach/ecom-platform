@@ -21,6 +21,8 @@
 - Uploads already in progress can finish after deletion cleanup and leave images behind.
 - Consumes `PRODUCT_IMAGES_DETACHED` and deletes only listed images belonging
   to that product. Missing images are skipped; retained images and avatars are preserved.
+- Consumes `USER_AVATAR_CHANGED` from `user.events` and deletes the previous
+  avatar only if it belongs to that user. Uses the same three-retry policy.
 - Product upload limit: max 5 files per request
 - Checks product ownership with product service before validating or storing files
 - Validates every file in a product batch before uploading any file
@@ -39,7 +41,7 @@
 ## Dependencies
 
 - MongoDB
-- Kafka (`KAFKA_BOOTSTRAP_SERVERS`); consumes `product.events`, created by product service at startup
+- Kafka (`KAFKA_BOOTSTRAP_SERVERS`); consumes `product.events` and `user.events`, created by product and user services at startup
 - MinIO
 - Eureka (`discovery-service`)
 - Product service (internal ownership check; discovered through Eureka and reached without the gateway)

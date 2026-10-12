@@ -147,17 +147,17 @@ See [Kafka events](docs/kafka-events.md) for the event payloads.
 
 Product deletion publishing and Media cleanup are implemented. Production
 Compose also includes a single broker accessible on the backend network.
-Detached-image cleanup is implemented; avatar replacement cleanup remains planned.
+Product deletion, detached-image cleanup, and avatar replacement/clearing cleanup are implemented.
 The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
 along with the other development volumes.
 
 2. Run backend services manually (each in a separate terminal). Start product
-service first so it creates the topic consumed by media service:
+and user services first so they create the topics consumed by media service:
 
 ```bash
 cd backend/product-service && ./mvnw spring-boot:run
-cd backend/media-service && ./mvnw spring-boot:run
 cd backend/user-service && ./mvnw spring-boot:run
+cd backend/media-service && ./mvnw spring-boot:run
 cd backend/gateway-service && ./mvnw spring-boot:run
 ```
 
@@ -201,7 +201,7 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 2. Upload images: `POST /media/images` with `productId` + `files[]`
 3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
 
-User and product discover media service through Eureka with explicit HTTP timeouts; `MEDIA_SERVICE_BASE_URL` is no longer needed. Avatar uploads preserve previous images; replacement cleanup is deferred to a future Kafka implementation. Product image metadata is available at `GET /media/images/{productId}`; the browser loads returned object URLs through Gateway → MinIO.
+User and product discover media service through Eureka with explicit HTTP timeouts; `MEDIA_SERVICE_BASE_URL` is no longer needed. Avatar uploads preserve previous images until a profile change publishes `USER_AVATAR_CHANGED` to clean up the previous avatar. Product image metadata is available at `GET /media/images/{productId}`; the browser loads returned object URLs through Gateway → MinIO.
 
 Product uploads verify ownership through an internal product-service endpoint before validating files. Media discovers product service through Eureka using Spring Cloud LoadBalancer; a fixed `PRODUCT_SERVICE_BASE_URL` is no longer required. Media accepts JPEG and PNG using Apache Tika content type detection and ImageIO decoding checks; GIF and WebP are unsupported. Deploy product service before media service when introducing this ownership check. See the media-service README for upload failure and cleanup behavior.
 

@@ -35,4 +35,14 @@ public class MediaCleanupService {
             mediaRepository.deleteById(media.getId());
         }
     }
+
+    public void handleUserAvatarChanged(String userId, String previousMediaId) {
+        var media = mediaRepository.findById(previousMediaId).orElse(null);
+        if (media == null || media.getOwnerType() != OwnerType.AVATAR
+                || !userId.equals(media.getOwnerId())) {
+            return;
+        }
+        objectStorageService.delete(media.getObjectKey());
+        mediaRepository.deleteById(media.getId());
+    }
 }

@@ -40,6 +40,9 @@ public class UserServiceTest {
     @Mock
     private MediaValidationService mediaValidationService;
 
+    @Mock
+    private ecom.user_service.event.UserEventProducer userEventProducer;
+
     @InjectMocks
     private UserService userService;
 
@@ -163,6 +166,7 @@ public class UserServiceTest {
 
         userService.updateProfile(userId, request);
 
+        verify(userEventProducer).publishUserAvatarChanged(userId, "media-123", null);
         assertEquals(null, mockUser.getAvatarMediaId());
         verify(mediaValidationService, never()).validateAvatarOwnership(any(), any());
     }
@@ -174,5 +178,41 @@ public class UserServiceTest {
 
         assertThrows(UserNotFoundException.class, () -> userService.updateProfile(userId, request));
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void replacementPublishesAfterSave() {
+        mockUser.setAvatarMediaId("old");
+        var request = new UpdateRequest();
+        request.setAvatarMediaId(" new ");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(mockUser)).thenReturn(mockUser);
+        userService.updateProfile(userId, request);
+        var order = org.mockito.Mockito.inOrder(userRepository, userEventProducer);
+        order.verify(userRepository).save(mockUser);
+        order.verify(userEventProducer).publishUserAvatarChanged(userId, "old", "new");
+    }
+
+    @Test
+    void firstSelectionUnchangedAndOmittedAvatarDoNotPublishCleanup() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(mockUser)).thenReturn(mockUser);
+        var request = new UpdateRequest();
+        request.setAvatarMediaId("first");
+        userService.updateProfile(userId, request);
+        userService.updateProfile(userId, request);
+        userService.updateProfile(userId, new UpdateRequest());
+        org.mockito.Mockito.verifyNoInteractions(userEventProducer);
+    }
+
+    @Test
+    void failedSaveDoesNotPublishCleanup() {
+        mockUser.setAvatarMediaId("old");
+        var request = new UpdateRequest();
+        request.setAvatarMediaId(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(userRepository.save(mockUser)).thenThrow(new IllegalStateException("offline"));
+        assertThrows(IllegalStateException.class, () -> userService.updateProfile(userId, request));
+        org.mockito.Mockito.verifyNoInteractions(userEventProducer);
     }
 }

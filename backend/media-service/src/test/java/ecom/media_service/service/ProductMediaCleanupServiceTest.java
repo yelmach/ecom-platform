@@ -72,4 +72,33 @@ class MediaCleanupServiceTest {
         verify(media).deleteById("m");
     }
 
+
+    @Test
+    void avatarCleanupDeletesOwnedAvatarBeforeMetadata() {
+        var avatar = Media.builder().id("old").ownerType(OwnerType.AVATAR).ownerId("u")
+                .objectKey("avatars/u/old.png").build();
+        when(media.findById("old")).thenReturn(java.util.Optional.of(avatar));
+        doThrow(new IllegalStateException("offline")).doNothing().when(storage).delete("avatars/u/old.png");
+        assertThrows(IllegalStateException.class, () -> service.handleUserAvatarChanged("u", "old"));
+        verify(media, never()).deleteById("old");
+        service.handleUserAvatarChanged("u", "old");
+        var order = inOrder(storage, media);
+        order.verify(storage, times(2)).delete("avatars/u/old.png");
+        order.verify(media).deleteById("old");
+        when(media.findById("old")).thenReturn(java.util.Optional.empty());
+        service.handleUserAvatarChanged("u", "old");
+        verify(media).deleteById("old");
+        verify(storage, never()).deleteByPrefix(anyString());
+    }
+
+    @Test
+    void avatarCleanupSkipsWrongOwnerAndProductImages() {
+        when(media.findById("other")).thenReturn(java.util.Optional.of(
+                Media.builder().id("other").ownerType(OwnerType.AVATAR).ownerId("other-user").build()));
+        when(media.findById("m")).thenReturn(java.util.Optional.of(image));
+        service.handleUserAvatarChanged("u", "other");
+        service.handleUserAvatarChanged("u", "m");
+        verifyNoInteractions(storage);
+        verify(media, never()).deleteById(anyString());
+    }
 }

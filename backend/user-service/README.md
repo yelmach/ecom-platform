@@ -17,6 +17,7 @@
 - Allows role selection during registration only
 - Supports profile updates (username, email, password, avatar)
 - Stores `avatarMediaId` and validates it via `media-service`
+- Publishes avatar replacement/clearing cleanup events to Kafka (`KAFKA_BOOTSTRAP_SERVERS`)
 
 `GET /users/me` and `PATCH /users/me` trust the sanitized `X-User-Id`
 header created by `gateway-service`. Do not expose this service through a route
@@ -51,4 +52,4 @@ cd backend/user-service
 ./mvnw spring-boot:run
 ```
 
-Password DTOs enforce a maximum of 72 characters. Avatar ownership is validated through media’s internal ownership endpoint before saving the profile. Saving a new avatar reference does not delete previous avatars. Replacement cleanup is deferred to a future Kafka implementation. Media unavailability during ownership validation returns `503`. Deploy the new media endpoints before this caller.
+Password DTOs enforce a maximum of 72 characters. Avatar ownership is validated through media’s internal ownership endpoint before saving the profile. Replacing or clearing an existing avatar publishes `USER_AVATAR_CHANGED` to `user.events` after saving the profile. Publication failures are logged without failing the successful update; there is no replay queue. First selection and unchanged references emit nothing. Media unavailability during ownership validation returns `503`. Deploy the new media endpoints before this caller.

@@ -15,7 +15,7 @@ from the beans. Existing topics are reused.
 Start Kafka with `make kafka-up`, then start the applications. They use
 `KAFKA_BOOTSTRAP_SERVERS` from `.env` (Docker: `kafka:9092`) or `.env.local`
 (IDE: `localhost:29092`). Startup fails if Kafka is unavailable.
-Start product service before media service so its topic exists.
+Start product and user services before media service so both topics exist.
 List the topics after starting product and user services with `make kafka-topics`.
 
 Topic names and event payloads are unversioned for this learning project.
@@ -95,6 +95,26 @@ reattaching an image before its cleanup event is processed can leave stale
 references or delete a reattached image; no locking or reattachment protection
 is implemented.
 
-Avatar events remain planned; their producer and consumer are not implemented.
+## Avatar replacement and clearing (implemented)
+
+After a successful `PATCH /users/me`, user service publishes `USER_AVATAR_CHANGED`
+to `user.events`, keyed by user ID, when an existing avatar reference changes.
+The payload contains `userId`, `previousMediaId`, and `currentMediaId` (null when
+cleared). Explicit null or blank input clears the avatar; an omitted field leaves
+it unchanged. First selection and unchanged references emit no cleanup event.
+Uploading an avatar alone does not trigger deletion.
+
+User service waits for the publish attempt, logs failures, and still returns the
+successful profile response. There is no outgoing replay queue. Media consumes
+using group `media-avatar-cleanup` and deletes only the previous avatar whose
+owner type is `AVATAR` and owner ID matches the user. Missing images are skipped;
+product images, other users' avatars, and the current avatar are preserved.
+MinIO deletion precedes metadata deletion, with the same three retries five
+seconds apart. Malformed events are logged and skipped without cleanup.
+
+Avatar edits are assumed sequential. Reusing an old avatar before its cleanup
+event runs can delete that reused image; concurrent profile edits and missed
+publication can also leave stale references or images behind.
+
 
 Reference: [Spring Kafka topic configuration](https://docs.spring.io/spring-kafka/reference/kafka/configuring-topics.html).
