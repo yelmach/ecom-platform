@@ -20,7 +20,7 @@ public class UpdateRequest {
     @Email(message = "Invalid Email Format")
     private String email;
 
-    @Size(min = 6, max = 100)
+    @Size(min = 6, max = 72)
     private String password;
 
     private String avatarMediaId;

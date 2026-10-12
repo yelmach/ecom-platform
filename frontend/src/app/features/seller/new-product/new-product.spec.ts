@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ANIMATION_MODULE_TYPE } from '@angular/platform-browser/animations';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { NewProduct } from './new-product';
 import { ProductService } from '../../../core/services/product.service';
@@ -96,15 +96,19 @@ describe('NewProduct Component', () => {
       price.setValue(0.01);
       expect(price.errors).toBeNull();
 
-      quantity.setValue(0);
+      quantity.setValue(-1);
       expect(quantity.hasError('min')).toBeTrue();
+      quantity.setValue(0);
+      expect(quantity.valid).toBeTrue();
+      quantity.setValue(1.5);
+      expect(quantity.hasError('pattern')).toBeTrue();
       quantity.setValue(1);
       expect(quantity.errors).toBeNull();
     });
 
     describe('Image Handling', () => {
       it('should add valid image files and generate previews', () => {
-        const mockFile = new File([''], 'test.png', { type: 'image/png' });
+        const mockFile = new File(['image'], 'test.png', { type: 'image/png' });
         const event = { target: { files: [mockFile] } } as unknown as Event;
 
         component.onFileSelected(event);
@@ -116,31 +120,42 @@ describe('NewProduct Component', () => {
       });
 
       it('should reject invalid file types and sizes', () => {
-        const textFile = new File([''], 'test.txt', { type: 'text/plain' });
+        const textFile = new File(['image'], 'test.txt', { type: 'text/plain' });
 
         // Artificially create a large file
-        const largeFile = new File([''], 'large.jpg', { type: 'image/jpeg' });
+        const largeFile = new File(['image'], 'large.jpg', { type: 'image/jpeg' });
         Object.defineProperty(largeFile, 'size', { value: 3 * 1024 * 1024 });
 
         const event = { target: { files: [textFile, largeFile] } } as unknown as Event;
         component.onFileSelected(event);
 
         expect(component.images().length).toBe(0);
-        expect(component.imageError()).toContain('Only PNG/JPG/GIF/WEBP images up to 2MB');
+        expect(component.imageError()).toContain('Only non-empty PNG/JPG images up to 2MB');
+      });
+
+      it('should reject GIF, WebP and empty images', () => {
+        const files = [
+          new File(['image'], 'test.gif', { type: 'image/gif' }),
+          new File(['image'], 'test.webp', { type: 'image/webp' }),
+          new File([], 'empty.png', { type: 'image/png' }),
+        ];
+        component.onFileSelected({ target: { files } } as unknown as Event);
+        expect(component.images()).toEqual([]);
+        expect(component.imageError()).toContain('PNG/JPG');
       });
 
       it('should enforce a maximum of 5 images', () => {
-        const files = Array.from({ length: 6 }).map((_, i) => new File([''], `test${i}.png`, { type: 'image/png' }));
+        const files = Array.from({ length: 6 }).map((_, i) => new File(['image'], `test${i}.png`, { type: 'image/png' }));
         const event = { target: { files } } as unknown as Event;
 
         component.onFileSelected(event);
 
         expect(component.images().length).toBe(5);
-        expect(component.imageError()).toContain('Only PNG/JPG/GIF/WEBP images up to 2MB');
+        expect(component.imageError()).toContain('Only non-empty PNG/JPG images up to 2MB');
       });
 
       it('should remove an image by index', () => {
-        const file = new File([''], 'test.png', { type: 'image/png' });
+        const file = new File(['image'], 'test.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [file] } } as unknown as Event);
 
         expect(component.images().length).toBe(1);
@@ -180,7 +195,7 @@ describe('NewProduct Component', () => {
         productServiceSpy.updateProduct.and.returnValue(of(mockProduct));
 
         // Add a mock image
-        const mockFile = new File([''], 'test.png', { type: 'image/png' });
+        const mockFile = new File(['image'], 'test.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [mockFile] } } as unknown as Event);
 
         component.onSubmit();
@@ -189,6 +204,59 @@ describe('NewProduct Component', () => {
         expect(mediaServiceSpy.uploadProductImages).toHaveBeenCalledWith('prod-123', [mockFile]);
         expect(productServiceSpy.updateProduct).toHaveBeenCalledWith('prod-123', { mediaIds: ['media-1'] });
         expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/seller');
+        expect(component.isSubmitting()).toBeFalse();
+      });
+
+      it('should retry a failed product reference save without recreating or reuploading', () => {
+        productServiceSpy.createProduct.and.returnValue(of({ ...mockProduct, ...validFormPayload, mediaIds: [] }));
+        mediaServiceSpy.uploadProductImages.and.returnValue(of(mockImagesResponse));
+        productServiceSpy.updateProduct.and.returnValues(
+          throwError(() => new HttpErrorResponse({ status: 503 })),
+          of(mockProduct),
+        );
+        const file = new File(['image'], 'test.png', { type: 'image/png' });
+        component.onFileSelected({ target: { files: [file] } } as unknown as Event);
+        component.onSubmit();
+        expect(component.submitError()).toContain('unavailable');
+        component.onSubmit();
+        expect(productServiceSpy.createProduct).toHaveBeenCalledTimes(1);
+        expect(mediaServiceSpy.uploadProductImages).toHaveBeenCalledTimes(1);
+        expect(productServiceSpy.updateProduct).toHaveBeenCalledTimes(2);
+        expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/seller');
+      });
+
+      it('should keep the created product when image validation fails and retry its upload', () => {
+        productServiceSpy.createProduct.and.returnValue(of({ ...mockProduct, ...validFormPayload, mediaIds: [] }));
+        mediaServiceSpy.uploadProductImages.and.returnValues(
+          throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Invalid image' } })),
+          of(mockImagesResponse),
+        );
+        productServiceSpy.updateProduct.and.returnValue(of(mockProduct));
+        component.onFileSelected({ target: { files: [new File(['image'], 'test.png', { type: 'image/png' })] } } as unknown as Event);
+        component.onSubmit();
+        expect(component.submitError()).toBe('Invalid image');
+        component.onSubmit();
+        expect(productServiceSpy.createProduct).toHaveBeenCalledTimes(1);
+        expect(mediaServiceSpy.uploadProductImages).toHaveBeenCalledTimes(2);
+      });
+
+      it('should prevent file changes and repeated submits while images are uploading', () => {
+        const upload = new Subject<ProductImagesResponse>();
+        productServiceSpy.createProduct.and.returnValue(of({ ...mockProduct, ...validFormPayload, mediaIds: [] }));
+        mediaServiceSpy.uploadProductImages.and.returnValue(upload);
+        productServiceSpy.updateProduct.and.returnValue(of(mockProduct));
+        const file = new File(['image'], 'test.png', { type: 'image/png' });
+        component.onFileSelected({ target: { files: [file] } } as unknown as Event);
+        component.onSubmit();
+        component.removeImage(0);
+        component.onFileSelected({ target: { files: [file] } } as unknown as Event);
+        component.onSubmit();
+        expect(component.images().length).toBe(1);
+        expect(mediaServiceSpy.uploadProductImages).toHaveBeenCalledTimes(1);
+        expect(productServiceSpy.createProduct).toHaveBeenCalledTimes(1);
+        upload.next(mockImagesResponse);
+        upload.complete();
+        expect(component.images()[0].mediaId).toBe('media-1');
         expect(component.isSubmitting()).toBeFalse();
       });
 
@@ -267,7 +335,7 @@ describe('NewProduct Component', () => {
       });
 
       it('should enable submit button if a new image is added', () => {
-        const mockFile = new File([''], 'new.png', { type: 'image/png' });
+        const mockFile = new File(['image'], 'new.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [mockFile] } } as unknown as Event);
 
         expect(component.isSubmitDisabled()).toBeFalse();
@@ -298,7 +366,7 @@ describe('NewProduct Component', () => {
 
       it('should upload new images and merge mediaIds on submit', () => {
         // Add a new image
-        const newFile = new File([''], 'new.png', { type: 'image/png' });
+        const newFile = new File(['image'], 'new.png', { type: 'image/png' });
         component.onFileSelected({ target: { files: [newFile] } } as unknown as Event);
 
         const newImagesResponse: ProductImagesResponse = {

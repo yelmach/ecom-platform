@@ -28,9 +28,10 @@ export interface ProductUpdateData {
 
 export interface Page<T> {
     content: T[];
-    totalElements: number;
-    totalPages: number;
-    size: number;
-    number: number;
-    last: boolean;
+    page: {
+        totalElements: number;
+        totalPages: number;
+        size: number;
+        number: number;
+    };
 }

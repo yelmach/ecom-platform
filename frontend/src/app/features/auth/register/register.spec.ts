@@ -122,25 +122,25 @@ describe('Register Component', () => {
     });
 
     it('should reject non-image files', () => {
-      const mockEvent = { target: { files: [new File([''], 'test.txt', { type: 'text/plain' })] } } as unknown as Event;
+      const mockEvent = { target: { files: [new File(['image'], 'test.txt', { type: 'text/plain' })] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
 
-      expect(component.submitError()).toBe('Avatar must be an image file.');
+      expect(component.submitError()).toBe('Avatar must be a JPEG or PNG image.');
       expect(component.avatarPreview()).toBeNull();
     });
 
     it('should reject files larger than 2MB', () => {
       // Create a dummy file artificially reporting > 2MB size
-      const mockFile = new File([''], 'large.jpg', { type: 'image/jpeg' });
+      const mockFile = new File(['image'], 'large.jpg', { type: 'image/jpeg' });
       Object.defineProperty(mockFile, 'size', { value: 3 * 1024 * 1024 });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
 
       component.onAvatarSelected(mockEvent);
-      expect(component.submitError()).toBe('Avatar must be 2 MB or less.');
+      expect(component.submitError()).toBe('Avatar must be non-empty and 2 MB or less.');
     });
 
     it('should accept valid images and create a preview', () => {
-      const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
+      const mockFile = new File(['image'], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
 
       component.onAvatarSelected(mockEvent);
@@ -162,6 +162,15 @@ describe('Register Component', () => {
       email: 'test@example.com',
       password: 'password123',
     };
+
+    it('should reject spaced usernames and passwords above 72 characters', () => {
+      component.registerForm.setValue({ ...validFormData, username: 'Test User' });
+      component.onSubmit();
+      expect(authServiceSpy.register).not.toHaveBeenCalled();
+      component.registerForm.setValue({ ...validFormData, password: 'a'.repeat(73) });
+      component.onSubmit();
+      expect(authServiceSpy.register).not.toHaveBeenCalled();
+    });
 
     it('should not submit if the form is invalid', () => {
       component.onSubmit();
@@ -200,7 +209,7 @@ describe('Register Component', () => {
       component.registerForm.setValue({ ...validFormData, role: 'SELLER' });
 
       // Simulate setting an avatar
-      const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
+      const mockFile = new File(['image'], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
 
@@ -218,7 +227,7 @@ describe('Register Component', () => {
 
       component.registerForm.setValue(validFormData);
 
-      const mockFile = new File([''], 'avatar.png', { type: 'image/png' });
+      const mockFile = new File(['image'], 'avatar.png', { type: 'image/png' });
       const mockEvent = { target: { files: [mockFile] } } as unknown as Event;
       component.onAvatarSelected(mockEvent);
 

@@ -17,6 +17,7 @@
 - Allows role selection during registration only
 - Supports profile updates (username, email, password, avatar)
 - Stores `avatarMediaId` and validates it via `media-service`
+- Publishes avatar replacement/clearing cleanup events to Kafka (`KAFKA_BOOTSTRAP_SERVERS`)
 
 `GET /users/me` and `PATCH /users/me` trust the sanitized `X-User-Id`
 header created by `gateway-service`. Do not expose this service through a route
@@ -36,17 +37,19 @@ that bypasses the gateway.
 ## Dependencies
 - MongoDB
 - Eureka (`discovery-service`)
-- Media service (`MEDIA_SERVICE_BASE_URL`)
+- Media service (Eureka discovery)
 - JWT RSA key pair (`JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`)
 
 ## Configuration
 - `USER_SERVICE_PORT` (default `8081`)
 - `MONGO_*`, `EUREKA_*`, `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`
 - `JWT_EXPIRATION` as a duration such as `24h`
-- `MEDIA_SERVICE_BASE_URL`
+- Media calls use `http://media-service` through Spring Cloud LoadBalancer, with 1-second connection and 3-second response timeouts.
 
 ## Quick run
 ```bash
 cd backend/user-service
 ./mvnw spring-boot:run
 ```
+
+Password DTOs enforce a maximum of 72 characters. Avatar ownership is validated through media’s internal ownership endpoint before saving the profile. Replacing or clearing an existing avatar publishes `USER_AVATAR_CHANGED` to `user.events` after saving the profile. Publication failures are logged without failing the successful update; there is no replay queue. First selection and unchanged references emit nothing. Media unavailability during ownership validation returns `503`. Deploy the new media endpoints before this caller.

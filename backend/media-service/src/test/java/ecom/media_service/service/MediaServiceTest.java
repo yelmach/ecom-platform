@@ -2,25 +2,40 @@ package ecom.media_service.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.inOrder;
 
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import ecom.media_service.dto.response.ProductImagesResponse;
+import ecom.media_service.config.MediaProperties;
 import ecom.media_service.dto.response.ProfileImageResponse;
 import ecom.media_service.exception.BadRequestException;
 import ecom.media_service.exception.MediaNotFoundException;
@@ -38,14 +53,23 @@ class MediaServiceTest {
     @Mock
     private ObjectStorageService objectStorageService;
 
-    @Mock
-    private FileValidationService fileValidationService;
+    @Spy
+    private FileValidationService fileValidationService = new FileValidationService(new MediaProperties());
 
     @Mock
     private MediaUrlBuilder mediaUrlBuilder;
 
-    @InjectMocks
+    @Mock
+    private ProductOwnershipService productOwnershipService;
+
     private MediaService mediaService;
+
+    @BeforeEach
+    void setUp() {
+        MediaStorageService storage = new MediaStorageService(objectStorageService, mediaRepository);
+        mediaService = new MediaService(mediaRepository, storage, fileValidationService,
+                mediaUrlBuilder, productOwnershipService);
+    }
 
     @Mock
     private MultipartFile file;
@@ -57,12 +81,13 @@ class MediaServiceTest {
         assertThrows(BadRequestException.class, () -> mediaService.uploadProductImages("user-1", "prod-1", null));
         assertThrows(BadRequestException.class, () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[0]));
         assertThrows(BadRequestException.class, () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file, file, file, file, file, file }));
+        verifyNoInteractions(productOwnershipService, fileValidationService, objectStorageService, mediaRepository);
     }
 
     @Test
     void uploadProductImages_ShouldUploadAndPersist() {
         ValidatedFile validatedFile = new ValidatedFile("abc".getBytes(), "image/png", ".png");
-        when(fileValidationService.validateImage(file)).thenReturn(validatedFile);
+        doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
@@ -98,13 +123,11 @@ class MediaServiceTest {
     }
 
     @Test
-    void uploadProfileImage_ShouldReplaceExistingAvatar() {
+    void uploadProfileImage_ShouldRetainExistingAvatarUntilProfileIsLinked() {
         ValidatedFile validatedFile = new ValidatedFile("abc".getBytes(), "image/jpeg", ".jpg");
-        when(fileValidationService.validateImage(file)).thenReturn(validatedFile);
+        doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
 
-        Media oldAvatar = Media.builder().id("old").ownerId("user-1").ownerType(OwnerType.AVATAR).objectKey("avatars/user-1/old.jpg").build();
-        when(mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, "user-1")).thenReturn(List.of(oldAvatar));
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
             media.setId("new");
@@ -114,17 +137,16 @@ class MediaServiceTest {
         ProfileImageResponse response = mediaService.uploadProfileImage("user-1", file);
 
         assertEquals("new", response.avatar().id());
-        verify(objectStorageService).delete("avatars/user-1/old.jpg");
-        verify(mediaRepository).deleteAll(List.of(oldAvatar));
+        verify(objectStorageService, never()).delete("avatars/user-1/old.jpg");
+        verify(mediaRepository, never()).deleteAll(any());
         verify(objectStorageService).upload(anyString(), any(byte[].class), eq("image/jpeg"));
     }
 
     @Test
     void uploadProfileImage_ShouldNotDeleteWhenNoExistingAvatar() {
         ValidatedFile validatedFile = new ValidatedFile("abc".getBytes(), "image/jpeg", ".jpg");
-        when(fileValidationService.validateImage(file)).thenReturn(validatedFile);
+        doReturn(validatedFile).when(fileValidationService).validateImage(file);
         when(mediaUrlBuilder.build(anyString())).thenAnswer(invocation -> "http://cdn/" + invocation.getArgument(0));
-        when(mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, "user-1")).thenReturn(List.of());
         when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> {
             Media media = invocation.getArgument(0);
             media.setId("new");
@@ -154,5 +176,108 @@ class MediaServiceTest {
         ProfileImageResponse response = mediaService.getProfileImage("user-1");
 
         assertEquals("av1", response.avatar().id());
+    }
+
+    @Test
+    void ownershipRejectionDoesNotValidateOrStoreFiles() {
+        for (HttpStatus status : new HttpStatus[] { HttpStatus.FORBIDDEN, HttpStatus.NOT_FOUND,
+                HttpStatus.BAD_REQUEST, HttpStatus.SERVICE_UNAVAILABLE }) {
+            ResponseStatusException failure = new ResponseStatusException(status);
+            doThrow(failure).when(productOwnershipService).verifyOwnership("prod-1", "user-1");
+            assertSame(failure, assertThrows(ResponseStatusException.class,
+                    () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file })));
+        }
+        verifyNoInteractions(fileValidationService, objectStorageService, mediaRepository);
+    }
+
+    @Test
+    void invalidLaterFileLeavesEntireBatchUnstored() {
+        MultipartFile invalid = org.mockito.Mockito.mock(MultipartFile.class);
+        doReturn(new ValidatedFile(new byte[] { 1 }, "image/png", ".png")).when(fileValidationService).validateImage(file);
+        doThrow(new BadRequestException("invalid image")).when(fileValidationService).validateImage(invalid);
+        assertThrows(BadRequestException.class,
+                () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file, invalid }));
+        verify(productOwnershipService).verifyOwnership("prod-1", "user-1");
+        verifyNoInteractions(objectStorageService, mediaRepository);
+    }
+
+    @Test
+    void checksOwnershipAndAllFilesBeforeFirstUpload() {
+        MultipartFile second = org.mockito.Mockito.mock(MultipartFile.class);
+        ValidatedFile valid = new ValidatedFile(new byte[] { 1 }, "image/png", ".png");
+        doReturn(valid).when(fileValidationService).validateImage(file);
+        doReturn(valid).when(fileValidationService).validateImage(second);
+        when(mediaRepository.save(any(Media.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file, second });
+        var order = inOrder(productOwnershipService, fileValidationService, objectStorageService);
+        order.verify(productOwnershipService).verifyOwnership("prod-1", "user-1");
+        order.verify(fileValidationService).validateImage(file);
+        order.verify(fileValidationService).validateImage(second);
+        order.verify(objectStorageService, times(2)).upload(anyString(), any(byte[].class), eq("image/png"));
+    }
+
+    @Test
+    void laterMetadataFailureCleansOnlyCurrentObjectAndStopsBatch() {
+        doReturn(new ValidatedFile(new byte[] { 1 }, "image/png", ".png")).when(fileValidationService).validateImage(file);
+        RuntimeException failure = new IllegalStateException("Mongo unavailable");
+        when(mediaRepository.save(any(Media.class))).thenReturn(Media.builder().id("first").objectKey("first-key").build())
+                .thenThrow(failure);
+        assertSame(failure, assertThrows(RuntimeException.class,
+                () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file, file, file })));
+        ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+        verify(objectStorageService, times(2)).upload(keys.capture(), any(byte[].class), eq("image/png"));
+        verify(objectStorageService).delete(keys.getAllValues().get(1));
+        verify(objectStorageService, never()).delete(keys.getAllValues().get(0));
+        verify(mediaRepository, times(2)).save(any(Media.class));
+    }
+
+    @Test
+    void uploadFailureAttemptsCleanupAndDoesNotSaveMetadata() {
+        doReturn(new ValidatedFile(new byte[] { 1 }, "image/png", ".png")).when(fileValidationService).validateImage(file);
+        RuntimeException failure = new IllegalStateException("MinIO unavailable");
+        doThrow(failure).when(objectStorageService).upload(anyString(), any(byte[].class), anyString());
+        assertSame(failure, assertThrows(RuntimeException.class,
+                () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file })));
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(objectStorageService).upload(key.capture(), any(byte[].class), anyString());
+        verify(objectStorageService).delete(key.getValue());
+        verifyNoInteractions(mediaRepository);
+    }
+
+    @Test
+    void avatarMetadataFailureUsesSameCleanup() {
+        doReturn(new ValidatedFile(new byte[] { 1 }, "image/png", ".png")).when(fileValidationService).validateImage(file);
+        RuntimeException failure = new IllegalStateException("Mongo unavailable");
+        when(mediaRepository.save(any(Media.class))).thenThrow(failure);
+        assertSame(failure, assertThrows(RuntimeException.class, () -> mediaService.uploadProfileImage("user-1", file)));
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(objectStorageService).upload(key.capture(), any(byte[].class), anyString());
+        verify(objectStorageService).delete(key.getValue());
+        verifyNoInteractions(productOwnershipService);
+    }
+
+    @Test
+    void cleanupFailureIsLoggedAndOriginalFailureIsPreserved() {
+        doReturn(new ValidatedFile(new byte[] { 1 }, "image/png", ".png")).when(fileValidationService).validateImage(file);
+        RuntimeException original = new IllegalStateException("save failed");
+        RuntimeException cleanup = new IllegalStateException("delete failed");
+        when(mediaRepository.save(any(Media.class))).thenThrow(original);
+        doThrow(cleanup).when(objectStorageService).delete(anyString());
+        Logger logger = (Logger) LoggerFactory.getLogger(MediaStorageService.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            assertSame(original, assertThrows(RuntimeException.class,
+                    () -> mediaService.uploadProductImages("user-1", "prod-1", new MultipartFile[] { file })));
+            assertSame(cleanup, original.getSuppressed()[0]);
+            ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+            verify(objectStorageService).delete(key.capture());
+            assertTrue(logs.list.stream().anyMatch(event -> event.getFormattedMessage().contains(key.getValue())
+                    && event.getFormattedMessage().contains("clean up") && event.getThrowableProxy() != null));
+        } finally {
+            logger.detachAppender(logs);
+            logs.stop();
+        }
     }
 }

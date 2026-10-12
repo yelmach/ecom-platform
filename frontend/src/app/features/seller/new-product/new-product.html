@@ -84,14 +84,15 @@
             #fileInput
             type="file"
             hidden
-            accept="image/png,image/jpeg,image/gif"
+            accept="image/png,image/jpeg"
             multiple
+            [disabled]="isSubmitting()"
             (change)="onFileSelected($event)"
           />
           <mat-icon class="upload-icon">cloud_upload</mat-icon>
           <p class="upload-text"><span class="upload-link">Upload a file</span></p>
           <p class="upload-hint">or drag and drop</p>
-          <p class="upload-formats">PNG, JPG, GIF, WEBP up to 2MB (max 5 files)</p>
+          <p class="upload-formats">PNG, JPG up to 2MB (max 5 files)</p>
         </div>
 
         @if (imageError()) {
@@ -110,6 +111,7 @@
                   mat-icon-button
                   type="button"
                   class="remove-btn"
+                  [disabled]="isSubmitting()"
                   (click)="removeImage(i); $event.stopPropagation()"
                 >
                   <mat-icon>close</mat-icon>

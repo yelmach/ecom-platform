@@ -28,11 +28,13 @@ describe('ProductList Component', () => {
 
     const mockPage: Page<Product> = {
         content: [mockProduct],
-        totalElements: 1,
-        totalPages: 1,
-        size: 10,
-        number: 0,
-        last: true
+        page: {
+            totalElements: 1,
+            totalPages: 1,
+            size: 10,
+            number: 0,
+        },
+
     };
 
     const mockImagesResponse: ProductImagesResponse = {

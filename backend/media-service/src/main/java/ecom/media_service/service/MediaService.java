@@ -2,7 +2,8 @@ package ecom.media_service.service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,7 +16,6 @@ import ecom.media_service.exception.MediaNotFoundException;
 import ecom.media_service.model.Media;
 import ecom.media_service.model.OwnerType;
 import ecom.media_service.repository.MediaRepository;
-import ecom.media_service.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -25,9 +25,10 @@ public class MediaService {
     private static final int MAX_FILES_PER_PRODUCT_UPLOAD = 5;
 
     private final MediaRepository mediaRepository;
-    private final ObjectStorageService objectStorageService;
+    private final MediaStorageService mediaStorageService;
     private final FileValidationService fileValidationService;
     private final MediaUrlBuilder mediaUrlBuilder;
+    private final ProductOwnershipService productOwnershipService;
 
     public ProductImagesResponse uploadProductImages(String uploaderId, String productId, MultipartFile[] files) {
         requireNonBlank(uploaderId, "Authenticated user is required");
@@ -40,20 +41,12 @@ public class MediaService {
             throw new BadRequestException("A maximum of 5 image files is allowed per upload");
         }
 
+        productOwnershipService.verifyOwnership(productId, uploaderId);
+        List<ValidatedFile> validatedFiles = fileValidationService.validateImages(files);
+
         List<MediaImageResponse> uploadedImages = new ArrayList<>();
-
-        for (MultipartFile file : files) {
-            ValidatedFile validatedFile = fileValidationService.validateImage(file);
-            String objectKey = "products/" + productId + "/" + UUID.randomUUID() + validatedFile.extension();
-
-            objectStorageService.upload(objectKey, validatedFile.bytes(), validatedFile.contentType());
-
-            Media saved = mediaRepository.save(Media.builder()
-                    .ownerId(productId)
-                    .ownerType(OwnerType.PRODUCT)
-                    .contentType(validatedFile.contentType())
-                    .objectKey(objectKey)
-                    .build());
+        for (ValidatedFile validatedFile : validatedFiles) {
+            Media saved = mediaStorageService.save(OwnerType.PRODUCT, productId, validatedFile);
 
             uploadedImages.add(toMediaImageResponse(saved));
         }
@@ -76,25 +69,7 @@ public class MediaService {
         requireNonBlank(userId, "Authenticated user is required");
         ValidatedFile validatedFile = fileValidationService.validateImage(file);
 
-        // Keep one active avatar: remove old avatar metadata and object first.
-        List<Media> existingAvatars = mediaRepository.findByOwnerTypeAndOwnerId(OwnerType.AVATAR, userId);
-        for (Media avatar : existingAvatars) {
-            objectStorageService.delete(avatar.getObjectKey());
-        }
-        if (!existingAvatars.isEmpty()) {
-            mediaRepository.deleteAll(existingAvatars);
-        }
-
-        String objectKey = "avatars/" + userId + "/" + UUID.randomUUID() + validatedFile.extension();
-
-        objectStorageService.upload(objectKey, validatedFile.bytes(), validatedFile.contentType());
-
-        Media savedAvatar = mediaRepository.save(Media.builder()
-                .ownerId(userId)
-                .ownerType(OwnerType.AVATAR)
-                .contentType(validatedFile.contentType())
-                .objectKey(objectKey)
-                .build());
+        Media savedAvatar = mediaStorageService.save(OwnerType.AVATAR, userId, validatedFile);
 
         return new ProfileImageResponse(toMediaImageResponse(savedAvatar));
     }
@@ -106,6 +81,18 @@ public class MediaService {
                 .orElseThrow(() -> new MediaNotFoundException("Profile image not found"));
 
         return new ProfileImageResponse(toMediaImageResponse(avatar));
+    }
+
+    public void verifyAvatarOwnership(String mediaId, String userId) {
+        requireNonBlank(userId, "Authenticated user is required");
+        requireNonBlank(mediaId, "mediaId is required");
+
+        Media avatar = mediaRepository.findById(mediaId)
+                .orElseThrow(() -> new MediaNotFoundException("Image not found"));
+
+        if (avatar.getOwnerType() != OwnerType.AVATAR || !userId.equals(avatar.getOwnerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Avatar does not belong to the current user");
+        }
     }
 
     private void requireNonBlank(String value, String message) {

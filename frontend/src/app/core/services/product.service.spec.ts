@@ -17,10 +17,12 @@ describe('ProductService', () => {
 
     const mockPage = {
         content: [mockProduct],
-        totalElements: 1,
-        totalPages: 1,
-        size: 10,
-        number: 0,
+        page: {
+            totalElements: 1,
+            totalPages: 1,
+            size: 10,
+            number: 0,
+        },
     } as Page<Product>;
 
     beforeEach(() => {

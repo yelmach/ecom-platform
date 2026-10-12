@@ -6,7 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIcon, MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { finalize, map, Observable, of, switchMap } from 'rxjs';
+import { finalize, map, Observable, of, switchMap, tap } from 'rxjs';
 import { ProductService } from '../../../core/services/product.service';
 import { Product } from '../../../core/models/product';
 import { MediaService } from '../../../core/services/media.service';
@@ -43,17 +43,17 @@ export class NewProduct implements OnInit {
   readonly productForm = new FormGroup({
     name: new FormControl('', {
       nonNullable: true,
-      validators: [Validators.required],
+      validators: [Validators.required, Validators.maxLength(120), Validators.pattern(/\S/)],
     }),
     description: new FormControl('', {
       nonNullable: true,
-      validators: [Validators.required],
+      validators: [Validators.maxLength(2000)],
     }),
     price: new FormControl<number | null>(null, {
       validators: [Validators.required, Validators.min(0.01)],
     }),
     quantity: new FormControl<number | null>(null, {
-      validators: [Validators.required, Validators.min(1)],
+      validators: [Validators.required, Validators.min(0), Validators.pattern(/^\d+$/)],
     }),
   });
 
@@ -101,11 +101,13 @@ export class NewProduct implements OnInit {
   }
 
   removeImage(index: number): void {
+    if (this.isSubmitting()) return;
     const updated = this.images().filter((_, i) => i !== index);
     this.images.set(updated);
   }
 
   onSubmit(): void {
+    if (this.isSubmitting()) return;
     this.fieldErrors.set({});
     this.submitError.set('');
 
@@ -152,12 +154,17 @@ export class NewProduct implements OnInit {
       this.productService.createProduct(payload)
         .pipe(
           switchMap((createdProduct) => {
+            // A later upload failure must not create a second product on retry.
+            this.editProductId = createdProduct.id;
+            this.isEditMode.set(true);
+            this.captureInitialEditState(createdProduct, []);
             const files = this.images().filter((image) => image.file).map((image) => image.file!);
             if (!files.length) {
               return of(createdProduct);
             }
 
             return this.mediaService.uploadProductImages(createdProduct.id, files).pipe(
+              tap((response) => this.rememberUploadedImages(response.images)),
               switchMap((uploadResponse) =>
                 this.productService.updateProduct(createdProduct.id, {
                   mediaIds: uploadResponse.images.map((image) => image.id),
@@ -199,8 +206,14 @@ export class NewProduct implements OnInit {
     if (errors['required']) {
       return `${fieldName} is required`;
     }
+    if (errors['maxlength']) {
+      return `${fieldName} must not exceed ${errors['maxlength'].requiredLength} characters`;
+    }
+    if (errors['pattern']) {
+      return fieldName === 'quantity' ? 'Quantity must be a whole number' : 'Name cannot be blank';
+    }
     if (errors['min']) {
-      return `${fieldName} must be greater than ${errors['min'].min}`;
+      return `${fieldName} must be at least ${errors['min'].min}`;
     }
 
     return '';
@@ -219,9 +232,10 @@ export class NewProduct implements OnInit {
   }
 
   private addFiles(files: File[]): void {
+    if (this.isSubmitting()) return;
     this.imageError.set('');
 
-    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+    const allowedTypes = new Set(['image/png', 'image/jpeg']);
     const currentImages = this.images();
     const slotsLeft = 5 - currentImages.length;
 
@@ -232,11 +246,11 @@ export class NewProduct implements OnInit {
 
     const validFiles = files
       .filter((file) => allowedTypes.has(file.type))
-      .filter((file) => file.size <= 2 * 1024 * 1024)
+      .filter((file) => file.size > 0 && file.size <= 2 * 1024 * 1024)
       .slice(0, slotsLeft);
 
     if (validFiles.length < files.length) {
-      this.imageError.set('Only PNG/JPG/GIF/WEBP images up to 2MB are accepted. Max 5 images.');
+      this.imageError.set('Only non-empty PNG/JPG images up to 2MB are accepted. Max 5 images.');
     }
 
     const newPreviews = validFiles.map((file) => ({
@@ -280,6 +294,7 @@ export class NewProduct implements OnInit {
     }
 
     return this.mediaService.uploadProductImages(this.editProductId, newFiles).pipe(
+      tap((response) => this.rememberUploadedImages(response.images)),
       map((uploadResponse) => [
         ...existingMediaIds,
         ...uploadResponse.images.map((image) => image.id),
@@ -287,8 +302,17 @@ export class NewProduct implements OnInit {
     );
   }
 
+  private rememberUploadedImages(uploaded: { id: string; url: string }[]): void {
+    let index = 0;
+    this.images.update((images) => images.map((image) => {
+      if (!image.file) return image;
+      const saved = uploaded[index++];
+      return { file: null, mediaId: saved.id, url: saved.url };
+    }));
+  }
+
   private handleSubmitError(error: HttpErrorResponse): void {
-    if (error.error?.details) {
+    if (error.error?.details && Object.keys(error.error.details).length > 0) {
       const details = error.error.details;
       this.fieldErrors.set(details);
 
@@ -309,6 +333,11 @@ export class NewProduct implements OnInit {
 
     if (error.status === 403) {
       this.submitError.set('Seller permission is required. Please sign in again with a seller account.');
+      return;
+    }
+
+    if (error.status === 503) {
+      this.submitError.set('A required service is unavailable. Please try again later.');
       return;
     }
 

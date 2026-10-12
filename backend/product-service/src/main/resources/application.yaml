@@ -6,6 +6,19 @@ spring:
     import: optional:file:../../.env.local[.properties]
   application:
     name: product-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    admin:
+      fail-fast: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 5000
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
   mongodb:
     uri: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_PRODUCT_DATABASE}?authSource=admin
     auto-index-creation: true
@@ -16,7 +29,3 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: http://${EUREKA_HOST}:${EUREKA_PORT}/eureka/
-
-media:
-  service:
-    base-url: ${MEDIA_SERVICE_BASE_URL}

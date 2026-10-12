@@ -65,6 +65,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void avatarInternalRoutesAreDenied() {
+        webTestClient.get().uri("/internal/media/avatars/avatar-1/ownership").exchange().expectStatus().isUnauthorized();
+        webTestClient.get().uri("/internal/media/avatars/avatar-1/ownership")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token(SIGNING_KEY, "SELLER", Instant.now().plusSeconds(60))))
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     void protectedEndpointRejectsMissingToken() {
         webTestClient.get().uri("/products/me")
                 .exchange()
@@ -150,6 +158,16 @@ class SecurityConfigTest {
         webTestClient.get().uri("/actuator/health")
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    void internalOwnershipEndpointIsDeniedEvenWithSellerTokenAndIdentityHeader() {
+        String path = "/internal/products/product-1/ownership";
+        webTestClient.get().uri(path).exchange().expectStatus().isUnauthorized();
+        webTestClient.get().uri(path)
+                .header(HttpHeaders.AUTHORIZATION, bearer(token(SIGNING_KEY, "SELLER", Instant.now().plusSeconds(60))))
+                .header("X-User-Id", "user-1")
+                .exchange().expectStatus().isUnauthorized();
     }
 
     @Test
@@ -248,7 +266,7 @@ class SecurityConfigTest {
             @RequestMapping(
                     path = {
                             "/auth/login", "/auth/register", "/products", "/products/{id}",
-                            "/users/me", "/media/images", "/media/images/{id}",
+                            "/users/me", "/media/images", "/media/images/{id}", "/internal/products/{id}/ownership",
                             "/media/profile", "/media/profile/{id}"
                     },
                     method = {

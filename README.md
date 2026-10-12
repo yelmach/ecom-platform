@@ -16,6 +16,7 @@ Supporting infrastructure:
 
 - MongoDB
 - MinIO (object storage)
+- Kafka (product deletion events and asynchronous media cleanup)
 
 Frontend:
 
@@ -34,6 +35,7 @@ Frontend:
 - `docs/jenkins-guide.md` (Jenkins setup + CI pipeline walkthrough)
 - `docs/sonarqube-guide.md` (SonarQube setup + Jenkins quality gate walkthrough)
 - `docs/ghcr-deployment-guide.md` (GHCR image deployment + rollback walkthrough)
+- `docs/kafka-events.md` (cleanup event contracts and local topic setup)
 
 ## Config files
 
@@ -116,20 +118,46 @@ make dev-up
 
 Stop the stack with `make dev-down`, or use `make dev-down-v` to also remove volumes.
 
+Both Compose files use the pinned community build `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`.
+The previously configured `quay.io/minio/minio:latest` image is no longer publicly pullable.
+This replacement is published by [PGSTY](https://github.com/pgsty/silo/tree/minio), an independent MinIO fork; upstream MinIO now documents [source-only distribution](https://github.com/minio/minio#source-only-distribution).
+The existing MinIO service name, ports, credentials, and data volume are retained.
+
 ### Infrastructure-only development
 
-1. Start infra (`mongo`, `minio`, `discovery-service`) from repo root:
+1. Start infra (`mongo`, `minio`, `discovery-service`, `kafka`) from repo root:
 
 ```bash
 make dev-infra-up
 ```
 
-2. Run backend services manually (each in a separate terminal):
+To start only Kafka, run `make kafka-up`. Inspect it with `make kafka-logs`
+or list topics with `make kafka-topics`.
+
+Kafka uses the official `apache/kafka:4.3.1` image in single-node KRaft mode,
+with persistent storage and a health check. Docker services connect to
+`kafka:9092`; services running from the IDE connect to `localhost:29092`.
+Set `KAFKA_BOOTSTRAP_SERVERS` accordingly in `.env` and `.env.local` when
+adding the service producers and consumers. Topic auto-creation is disabled.
+Product service creates `product.events` and User service creates
+`user.events` at application startup using Spring Kafka `NewTopic` beans.
+Existing topics are reused. Start Kafka before either application;
+startup fails if Kafka is unavailable. `make kafka-up` starts only the broker.
+See [Kafka events](docs/kafka-events.md) for the event payloads.
+
+Product deletion publishing and Media cleanup are implemented. Production
+Compose also includes a single broker accessible on the backend network.
+Product deletion, detached-image cleanup, and avatar replacement/clearing cleanup are implemented.
+The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
+along with the other development volumes.
+
+2. Run backend services manually (each in a separate terminal). Start product
+and user services first so they create the topics consumed by media service:
 
 ```bash
-cd backend/media-service && ./mvnw spring-boot:run
-cd backend/user-service && ./mvnw spring-boot:run
 cd backend/product-service && ./mvnw spring-boot:run
+cd backend/user-service && ./mvnw spring-boot:run
+cd backend/media-service && ./mvnw spring-boot:run
 cd backend/gateway-service && ./mvnw spring-boot:run
 ```
 
@@ -172,6 +200,10 @@ Frontend in dev mode still runs manually with `npm run start:https`.
 1. Create product: `POST /products` with `mediaIds: []`
 2. Upload images: `POST /media/images` with `productId` + `files[]`
 3. Save image IDs on product: `PUT /products/{id}` with `mediaIds`
+
+User and product discover media service through Eureka with explicit HTTP timeouts; `MEDIA_SERVICE_BASE_URL` is no longer needed. Avatar uploads preserve previous images until a profile change publishes `USER_AVATAR_CHANGED` to clean up the previous avatar. Product image metadata is available at `GET /media/images/{productId}`; the browser loads returned object URLs through Gateway → MinIO.
+
+Product uploads verify ownership through an internal product-service endpoint before validating files. Media discovers product service through Eureka using Spring Cloud LoadBalancer; a fixed `PRODUCT_SERVICE_BASE_URL` is no longer required. Media accepts JPEG and PNG using Apache Tika content type detection and ImageIO decoding checks; GIF and WebP are unsupported. Deploy product service before media service when introducing this ownership check. See the media-service README for upload failure and cleanup behavior.
 
 ## Compose files
 

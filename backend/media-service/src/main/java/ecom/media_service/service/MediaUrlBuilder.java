@@ -31,4 +31,3 @@ public class MediaUrlBuilder {
         return value.startsWith("/") ? value.substring(1) : value;
     }
 }
-

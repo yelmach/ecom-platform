@@ -38,7 +38,7 @@ export class Login {
     }),
     password: new FormControl('', {
       nonNullable: true,
-      validators: [Validators.required],
+      validators: [Validators.required, Validators.minLength(6), Validators.maxLength(72)],
     }),
   });
 
@@ -92,6 +92,13 @@ export class Login {
       return `${fieldName} is required`;
     }
 
+    if (errors['minlength']) {
+      return 'must be at least 6 characters';
+    }
+    if (errors['maxlength']) {
+      return 'must not exceed 72 characters';
+    }
+
     if (errors['email']) {
       return 'enter a valid email';
     }
@@ -100,7 +107,7 @@ export class Login {
   }
 
   private handleSubmitError(error: HttpErrorResponse): void {
-    if (error.error?.details) {
+    if (error.error?.details && Object.keys(error.error.details).length > 0) {
       const details = error.error.details;
       this.fieldErrors.set(details);
 

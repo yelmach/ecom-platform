@@ -1,9 +1,9 @@
 COMPOSE_ENV := .env
 COMPOSE_DEV := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.dev.yml
 COMPOSE_SONAR := docker compose --env-file $(COMPOSE_ENV) -f sonarQube/docker-compose.yml
-DEV_INFRA_SERVICES := mongo minio discovery-service
+DEV_INFRA_SERVICES := mongo minio discovery-service kafka
 
-.PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down jenkins-up jenkins-down sonar-up sonar-down sonar-logs
+.PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down kafka-up kafka-logs kafka-topics jenkins-up jenkins-down sonar-up sonar-down sonar-logs
 
 dev-up:
 	$(COMPOSE_DEV) up --build -d
@@ -35,3 +35,12 @@ sonar-down:
 
 sonar-logs:
 	$(COMPOSE_SONAR) logs -f
+
+kafka-up:
+	$(COMPOSE_DEV) up -d --wait kafka
+
+kafka-logs:
+	$(COMPOSE_DEV) logs -f kafka
+
+kafka-topics:
+	$(COMPOSE_DEV) exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list

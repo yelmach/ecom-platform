@@ -1,9 +1,10 @@
 package ecom.user_service.services;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 
 import ecom.user_service.exceptions.BadRequestException;
 import lombok.RequiredArgsConstructor;
@@ -11,34 +12,31 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MediaValidationService {
-
     private final RestClient mediaServiceRestClient;
 
     public void validateAvatarOwnership(String userId, String avatarMediaId) {
         try {
-            ProfileImageResponse response = mediaServiceRestClient
-                    .get()
-                    .uri("/media/profile/{userId}", userId)
-                    .retrieve()
-                    .body(ProfileImageResponse.class);
-
-            if (response == null || response.avatar() == null || response.avatar().id() == null) {
-                throw new BadRequestException("avatarMediaId is invalid");
-            }
-
-            if (!avatarMediaId.equals(response.avatar().id())) {
-                throw new BadRequestException("avatarMediaId does not belong to the current user");
-            }
-        } catch (HttpClientErrorException.NotFound ex) {
-            throw new BadRequestException("avatarMediaId is invalid");
-        } catch (RestClientException ex) {
-            throw new IllegalStateException("Failed to validate avatar media reference", ex);
+            mediaServiceRestClient.get()
+                    .uri("/internal/media/avatars/{mediaId}/ownership", avatarMediaId)
+                    .header("X-User-Id", userId)
+                    .exchange((request, response) -> {
+                        int status = response.getStatusCode().value();
+                        if (status == 204) {
+                            return null;
+                        }
+                        if (status == 403) {
+                            throw new BadRequestException("avatarMediaId does not belong to the current user");
+                        }
+                        if (status == 400 || status == 404) {
+                            throw new BadRequestException("avatarMediaId is invalid");
+                        }
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Failed to validate avatar media reference");
+                    });
+        } catch (RestClientException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Failed to validate avatar media reference", ex);
         }
     }
 
-    private record ProfileImageResponse(MediaImageResponse avatar) {
-    }
-
-    private record MediaImageResponse(String id, String url) {
-    }
 }

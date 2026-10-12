@@ -43,7 +43,7 @@ export class ProductList implements OnInit {
       next: (page) => {
         this.products.update((current) => [...current, ...page.content]);
         this.loadProductImageUrls(page.content);
-        this.isLast.set(page.last);
+        this.isLast.set(page.page.number + 1 >= page.page.totalPages);
         this.currentPage.update((p) => p + 1);
         this.loading.set(false);
       },
