@@ -14,7 +14,7 @@
 
 ## Configuration
 - `EUREKA_HOST` (default `localhost`)
-- `EUREKA_PORT` (default `8761`)
+- `EUREKA_PORT` (default `6204`)
 - Optional host-local env import from root `.env.local`
 
 ## Quick run

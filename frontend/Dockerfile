@@ -14,6 +14,6 @@ COPY --from=build /app/dist/frontend/browser ./
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 4200
+EXPOSE 6100
 
 CMD ["nginx", "-g", "daemon off;"]

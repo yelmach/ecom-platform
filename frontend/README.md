@@ -4,10 +4,12 @@
 Angular app for the marketplace UI (auth, profile, product browsing, seller dashboard, and media upload flows).
 
 ## How it connects
-- In local dev (`npm run start:https`), proxy forwards API routes to `https://localhost:8443`
-- In Docker prod mode, Nginx in the frontend container proxies API routes to `https://gateway-service:8443`
-- Uses endpoints under `/auth`, `/users`, `/products`, `/media`
-- Stores JWT in browser storage (`jwt_token`)
+- `npm start` loads root `.env.local` and serves HTTP on `FRONTEND_PORT` (6100).
+- `proxy.conf.cjs` forwards API routes to local HTTP `GATEWAY_PORT` (6200).
+- Docker uses `nginx/default.conf`: frontend listens on 6100 and proxies to gateway port 6200. Compose reads the published host port from `.env`.
+- Production Caddy proxies `https://ecom.yelmach.com` to `http://127.0.0.1:6100`.
+- Uses endpoints under `/auth`, `/users`, `/products`, `/media`, and `/ecom-media`.
+- Stores JWT in browser storage (`jwt_token`).
 
 ## Main features
 - Login/register flows (with optional avatar upload)
@@ -30,18 +32,43 @@ Angular app for the marketplace UI (auth, profile, product browsing, seller dash
 - Eureka discovery and internal ownership endpoints are backend concerns. The browser continues to call the gateway using the existing public routes and a Bearer token.
 
 ## Run locally
+
+Create root `.env.local` from `.env.local.example`, then:
+
 ```bash
 cd frontend
-npm install
-npm run start:https
-```
-
-Alternative (HTTP):
-```bash
+npm ci
 npm start
 ```
 
-## Notes
-- `start:https` reuses `backend/certs/gateway.crt` and `backend/certs/gateway.key`
-- Proxy config forwards API routes to `https://localhost:8443`
-- Dockerized frontend serves the built app via Nginx on `https://localhost:4200`
+Open `http://localhost:6100`. No TLS certificates or `start:https` command are
+needed. API calls and image URLs use the same frontend origin. For production,
+see [Oracle deployment](../docs/oracle-deployment.md).
+
+## How runtime configuration works
+
+For manual development, `npm start` loads `.env.local` using Node's
+`--env-file` option. The small `scripts/serve.mjs` launcher passes `FRONTEND_PORT`
+to Angular and runs the CLI directly in the same process. Angular handles
+validation, terminal output, and stopping the development server.
+
+`proxy.conf.cjs` has one route rule for API and media requests. It reads
+`GATEWAY_PORT` and forwards requests to the local HTTP gateway. JavaScript is
+needed here because static JSON cannot read environment variables. Both files
+run only in local development tooling, not in the browser or production container.
+
+For Docker, the multi-stage build compiles Angular using Node and copies the
+static files and `nginx/default.conf` into the Nginx image. No configuration
+templating or extra environment variables are needed.
+
+Nginx listens on **6100** and proxies API/media requests to
+`http://gateway-service:6200`. Compose publishes its host port using
+`FRONTEND_PORT` from `.env`; `EXPOSE 6100` is image metadata.
+
+If the gateway's internal port changes, update `nginx/default.conf` alongside
+`.env` and rebuild the frontend image. Changing Nginx's listening port also
+requires updating Compose's container port and health check. Changing only the
+published host port does not require a rebuild; adjust Caddy's upstream to match.
+
+The config handles SPA routes, the 11 MB upload limit, `/healthz`, and Caddy's
+forwarded HTTPS scheme. Local connections use HTTP; no frontend certificate is needed.

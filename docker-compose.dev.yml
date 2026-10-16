@@ -1,19 +1,22 @@
 services:
+  # ----------------------------
+  # Kafka
+  # ----------------------------
   kafka:
     image: apache/kafka:4.3.1
     container_name: ecom-kafka
     ports:
-      - "127.0.0.1:29092:29092"
+      - "127.0.0.1:${KAFKA_HOST_PORT}:${KAFKA_HOST_PORT}"
     environment:
       # KRaft configuration
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:${KAFKA_CONTROLLER_PORT}
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
 
       # Network configuration
-      KAFKA_LISTENERS: INTERNAL://:9092,HOST://:29092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENERS: INTERNAL://:${KAFKA_PORT},HOST://:${KAFKA_HOST_PORT},CONTROLLER://:${KAFKA_CONTROLLER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:${KAFKA_PORT},HOST://localhost:${KAFKA_HOST_PORT}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
 
@@ -29,7 +32,7 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka
     healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092", "--list"]
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:${KAFKA_PORT}", "--list"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -46,7 +49,7 @@ services:
     container_name: ecom-mongo
     command: ["mongod", "--port", "${MONGO_PORT}"]
     ports:
-      - "${MONGO_PORT}:${MONGO_PORT}"
+      - "127.0.0.1:${MONGO_PORT}:${MONGO_PORT}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
@@ -54,7 +57,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --port ${MONGO_PORT} -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+      test: [CMD-SHELL, 'mongosh --quiet --port ${MONGO_PORT} --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "quit(db.runCommand({ ping: 1 }).ok ? 0 : 1)"']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -71,8 +74,8 @@ services:
     container_name: ecom-minio
     command: server /data --address ":${MINIO_API_PORT}" --console-address ":${MINIO_CONSOLE_PORT}"
     ports:
-      - "${MINIO_API_PORT}:${MINIO_API_PORT}"
-      - "${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}"
+      - "127.0.0.1:${MINIO_API_PORT}:${MINIO_API_PORT}"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -97,7 +100,7 @@ services:
     env_file:
       - ./.env
     ports:
-      - "${EUREKA_PORT}:${EUREKA_PORT}"
+      - "127.0.0.1:${EUREKA_PORT}:${EUREKA_PORT}"
     depends_on:
       mongo:
         condition: service_healthy
@@ -123,6 +126,10 @@ services:
     env_file:
       - ./.env
     depends_on:
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       mongo:
@@ -207,7 +214,6 @@ services:
       - ./.env
     volumes:
       - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
-      - ./backend/certs/gateway.p12:${GATEWAY_SSL_KEY_STORE}:ro
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -218,10 +224,10 @@ services:
       media-service:
         condition: service_healthy
     ports:
-      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+      - "127.0.0.1:${GATEWAY_PORT}:${GATEWAY_PORT}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -240,10 +246,12 @@ services:
       gateway-service:
         condition: service_healthy
     ports:
-      - "4200:4200"
-    volumes:
-      - ./backend/certs/gateway.crt:/etc/nginx/certs/gateway.crt:ro
-      - ./backend/certs/gateway.key:/etc/nginx/certs/gateway.key:ro
+      - "127.0.0.1:${FRONTEND_PORT}:6100"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:6100/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped
     networks:
       - ecom-network
