@@ -188,7 +188,9 @@ Production uses the separate `ecom-prod` Compose project and persistent volumes.
 
 See [Oracle deployment](docs/oracle-deployment.md) for environment setup, JWT
 keys, GHCR access, Caddy configuration, and verification. Images must be
-published before the first deployment. Jenkins and SonarQube are not configured yet.
+published before the first deployment. Jenkins controller/agent setup is documented
+in [infra/jenkins](infra/jenkins/README.md); SonarQube and the delivery pipeline
+are not configured yet.
 
 ## Build and test baseline
 

@@ -1,0 +1,31 @@
+jenkins:
+  numExecutors: 0
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    globalMatrix:
+      entries:
+        - user:
+            name: "${JENKINS_ADMIN_ID}"
+            permissions:
+              - "Overall/Administer"
+  nodes:
+    - permanent:
+        name: "jenkins-agent"
+        remoteFS: "/home/jenkins/agent"
+        numExecutors: 1
+        labelString: "arm64"
+        mode: EXCLUSIVE
+        launcher:
+          inbound: {}
+
+unclassified:
+  location:
+    url: "${JENKINS_PUBLIC_URL}"
+
+jobs:
+  - file: /usr/share/jenkins/config/jobs/agent-check.groovy
