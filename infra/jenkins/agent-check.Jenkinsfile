@@ -24,9 +24,11 @@ pipeline {
                     git --version
                     make --version
                     "$CHROME_BIN" --version
+                    sonar-scanner --version
                     test -w /home/jenkins/agent
                     test -w /home/jenkins/.m2
                     test -w /home/jenkins/.npm
+                    test -w "$SONAR_USER_HOME"
                 '''
             }
         }

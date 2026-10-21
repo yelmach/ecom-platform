@@ -5,3 +5,4 @@ credentials-binding:728.v902a_273b_8947
 junit:1442.vb_b_a_467df2767
 job-dsl:3732.v9a_c49a_61a_313
 matrix-auth:3.3
+sonar:2.19.0

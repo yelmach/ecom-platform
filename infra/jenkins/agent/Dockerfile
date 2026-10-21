@@ -6,18 +6,20 @@ USER root
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       git curl ca-certificates make chromium \
-       python3 build-essential libatomic1 \
+    git curl ca-certificates make chromium \
+    python3 build-essential libatomic1 unzip \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+COPY --from=node /usr/local/ /usr/local/
 
-RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+RUN curl -fsSL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.1.0.6389.zip -o /tmp/sonar-scanner.zip \
+    && unzip -q /tmp/sonar-scanner.zip -d /opt \
+    && rm /tmp/sonar-scanner.zip
 
-ENV CHROME_BIN=/usr/bin/chromium
+ENV PATH="/opt/sonar-scanner-8.1.0.6389/bin:${PATH}" \
+    CHROME_BIN=/usr/bin/chromium \
+    SONAR_USER_HOME=/home/jenkins/.sonar
 
 USER jenkins
-RUN mkdir -p /home/jenkins/agent /home/jenkins/.m2 /home/jenkins/.npm
+RUN mkdir -p /home/jenkins/agent /home/jenkins/.m2 /home/jenkins/.npm /home/jenkins/.sonar
 WORKDIR /home/jenkins/agent

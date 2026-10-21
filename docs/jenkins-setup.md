@@ -7,8 +7,8 @@ controller and a separate build agent on the Oracle Ampere A1 VM, with Ubuntu
 
 The setup verification job has been run successfully. Follow the steps below to
 reproduce the installation or understand how it works. This step establishes
-Jenkins and verifies its build environment; SonarQube, image publishing and
-application deployment are separate work.
+Jenkins and verifies its build environment. Follow the [SonarQube tutorial](sonarqube-setup.md)
+to configure code analysis and the CI quality gate.
 
 ## 1. Understand the controller and agent
 
@@ -74,9 +74,11 @@ All Jenkins infrastructure lives under `infra/jenkins/`:
 | [controller/jenkins.yaml](../infra/jenkins/controller/jenkins.yaml) | Declares the administrator, permissions, public URL, executors and agent using Jenkins Configuration as Code (JCasC). |
 | [controller/jobs/agent-check.groovy](../infra/jenkins/controller/jobs/agent-check.groovy) | Uses Job DSL to create or update the `agent-check` job and point it at the repository's Jenkinsfile. |
 | [controller/.dockerignore](../infra/jenkins/controller/.dockerignore) | Limits the controller build context to its Dockerfile, plugin list, YAML and job scripts. |
-| [agent/Dockerfile](../infra/jenkins/agent/Dockerfile) | Extends the inbound-agent image with Node 24/npm, Git, Make, Chromium, Python and native build tools. Java 21 comes from the base image. |
+| [agent/Dockerfile](../infra/jenkins/agent/Dockerfile) | Extends the inbound-agent image with Node 24/npm, Git, Make, Chromium, Python, native build tools and SonarScanner CLI. Java 21 comes from the base image. |
 | [agent/.dockerignore](../infra/jenkins/agent/.dockerignore) | Limits the agent build context to its Dockerfile. |
 | [agent-check.Jenkinsfile](../infra/jenkins/agent-check.Jenkinsfile) | Defines the verification stages executed by the agent. |
+| [Root Jenkinsfile](../Jenkinsfile) | Builds/tests the application, runs SonarQube analysis and enforces its quality gate. |
+| [CI job definition](../infra/jenkins/controller/jobs/ecom-ci.groovy) | Creates the `ecom-ci` job pointing at the root Jenkinsfile. |
 
 The root [Makefile](../Makefile) wraps Compose commands. The root
 [.env.example](../.env.example) lists the Jenkins settings to add to the ignored
@@ -97,6 +99,7 @@ plugins have the following roles:
 | `junit` | Publishes test reports. |
 | `job-dsl` | Creates jobs from Groovy definitions. |
 | `matrix-auth` | Assigns permissions explicitly. |
+| `sonar` | Connects analysis and quality-gate callbacks to Jenkins. |
 
 Compose sets `CASC_JENKINS_CONFIG` to
 `/usr/share/jenkins/config/jenkins.yaml`. On startup, JCasC configures:
@@ -108,6 +111,7 @@ Compose sets `CASC_JENKINS_CONFIG` to
 - One permanent inbound node named `jenkins-agent`, with one executor, workspace
   `/home/jenkins/agent`, label `arm64`, and exclusive usage for matching jobs.
 - The Job DSL script that creates `agent-check` without starting a build.
+- The `ecom-ci` job and SonarQube installation used by the analysis pipeline.
 
 The Job DSL file defines **where to fetch the pipeline**. The Jenkinsfile defines
 **what that pipeline does**. Both are needed to recreate the job automatically.
@@ -155,8 +159,10 @@ Compose uses `.env` for substitution and explicitly passes only the selected
 Jenkins settings into the controller. A variable existing in `.env` alone does
 not make it available inside a container.
 
-`jenkins-config` runs Compose validation quietly. Empty required controller
-values cause an error. JCasC and Job DSL are validated when Jenkins starts.
+`jenkins-config` checks Compose configuration quietly. Set the controller
+settings in `.env` before startup. The agent secret may be empty during initial
+controller setup; set it before starting the agent. JCasC and Job DSL are
+validated when Jenkins starts.
 Full Compose config output includes credentials, so keep that output private.
 
 ## 5. Build and start the controller
@@ -251,21 +257,16 @@ A running container does not prove the agent has authenticated. A missing or
 incorrect secret prevents connection. Start the controller first during initial
 setup: a plain Compose `up` starts both services, including an unconfigured agent.
 
-## 8. Configure Git access if needed
+## 8. Verify Git access
 
-For a public repository, no Git credential is required. For a private repository:
+The jobs use the public HTTPS repository URL from `JENKINS_REPOSITORY_URL`
+and the branch from `JENKINS_REPOSITORY_BRANCH`. No Git credential is required
+for the current public repository. Ensure that branch contains both
+`infra/jenkins/agent-check.Jenkinsfile` and the root `Jenkinsfile`.
 
-1. Open **Manage Jenkins > Credentials > System > Global**.
-2. Add a **Username with password** credential with your GitHub username and a
-   token permitted to read this repository.
-3. Set its ID to `github-read`.
-4. Add `JENKINS_GIT_CREDENTIALS_ID=github-read` to the root `.env`.
-5. Run `make jenkins-up` so the controller updates the generated job.
-
-This optional variable is supported by Compose and Job DSL even though it is not
-listed in the current `.env.example`. The token is stored in Jenkins credentials;
-only its ID is configured in `.env`. The job uses an HTTPS repository URL and the
-configured branch to load `infra/jenkins/agent-check.Jenkinsfile`.
+For a private repository, create a Jenkins Git credential and add its
+`credentials('your-credential-id')` to the `remote` block in both Job DSL files
+before rebuilding the controller. The current job definitions use anonymous checkout.
 
 ## 9. Run the verification pipeline
 
@@ -321,6 +322,7 @@ The named volumes preserve:
 | `agent_work` | Agent work directory and build workspaces. |
 | `maven_cache` | Maven downloads under `/home/jenkins/.m2`. |
 | `npm_cache` | npm cache under `/home/jenkins/.npm`. |
+| `sonar_cache` | Scanner engine, runtime and analyzer downloads under `/home/jenkins/.sonar`. |
 
 Compose prefixes these names with project `jenkins`, for example
 `jenkins_jenkins_home`. `make jenkins-down` removes containers and the network
@@ -338,14 +340,14 @@ overwritten. Rebuild the agent with `make jenkins-agent-up` after changing its
 Dockerfile. An unchanged `make jenkins-up` does not force a restart.
 
 No host Docker socket or application data volumes are mounted into this Jenkins
-stack. The current agent does not yet provide Docker image-building or deployment
-access. Add those capabilities when implementing the actual CI/CD pipeline.
+stack. SonarQube connects to its network as described in the
+[SonarQube tutorial](sonarqube-setup.md); stop that stack before removing the Jenkins
+network. The current agent does not provide Docker image-building or deployment access.
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| Compose rejects a required setting | Add the missing non-empty value to the root `.env`. |
 | Controller never becomes healthy | Inspect `make jenkins-logs` for plugin, JCasC or Job DSL errors. |
 | Public hostname fails but local port works | Check DNS, the Caddy site block and `sudo systemctl status caddy`. |
 | Agent remains offline | Check its node name, connection secret and `make jenkins-agent-logs`. |

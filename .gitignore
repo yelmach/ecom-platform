@@ -19,6 +19,8 @@ backend/certs/*
 target/
 *.jar
 *.war
+.scannerwork/
+__pycache__/
 
 # Logs
 *.log

@@ -164,7 +164,7 @@ Frontend in dev mode still runs manually with `npm start`.
 | MongoDB | 6210 |
 | MinIO API / console | 6220 / 6221 |
 | Kafka Docker / controller / host | 6230 / 6231 / 6232 |
-| Future Jenkins / SonarQube | 6300 / 6310 |
+| Jenkins / SonarQube | 6300 / 6310 |
 
 Both Compose files read ports from `.env`; Angular reads frontend and gateway
 ports from `.env.local` through `npm start`. Docker Nginx uses fixed internal ports (frontend 6100, gateway 6200).
@@ -189,8 +189,9 @@ Production uses the separate `ecom-prod` Compose project and persistent volumes.
 See [Oracle deployment](docs/oracle-deployment.md) for environment setup, JWT
 keys, GHCR access, Caddy configuration, and verification. Images must be
 published before the first deployment. Follow the [Jenkins setup tutorial](docs/jenkins-setup.md)
-for the controller and build agent, including their files and commands. SonarQube and the delivery pipeline
-are not configured yet.
+for the controller and build agent, including their files and commands. The
+[SonarQube tutorial](docs/sonarqube-setup.md) covers analysis and the Jenkins quality
+gate. Image publishing, automated deployment and notifications are subsequent steps.
 
 ## Build and test baseline
 
