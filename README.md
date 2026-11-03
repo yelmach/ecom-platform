@@ -169,8 +169,7 @@ Frontend in dev mode still runs manually with `npm start`.
 Both Compose files read ports from `.env`; Angular reads frontend and gateway
 ports from `.env.local` through `npm start`. Docker Nginx uses fixed internal ports (frontend 6100, gateway 6200).
 Changing these internal ports requires editing `frontend/nginx/default.conf`
-and rebuilding the frontend image; Compose reads the published frontend host port from `.env`. The two future tools are not
-installed yet. Caddy's public ports remain 80/443.
+and rebuilding the frontend image; Compose reads the published frontend host port from `.env`. Caddy's public ports remain 80/443.
 
 `CORS_ALLOWED_ORIGINS=http://localhost:6100` is the local frontend origin.
 On the VM use `https://ecom.yelmach.com`. CORS is configured by the gateway's
@@ -191,7 +190,8 @@ keys, GHCR access, Caddy configuration, and verification. Images must be
 published before the first deployment. Follow the [Jenkins setup tutorial](docs/jenkins-setup.md)
 for the controller and build agent, including their files and commands. The
 [SonarQube tutorial](docs/sonarqube-setup.md) covers analysis and the Jenkins quality
-gate. Image publishing, automated deployment and notifications are subsequent steps.
+gate. The [GHCR publishing tutorial](docs/ghcr-publishing.md) covers ARM64 image
+builds and publishing. Automated deployment and notifications follow.
 
 ## Build and test baseline
 

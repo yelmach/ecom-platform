@@ -88,7 +88,8 @@ curl -fsS http://127.0.0.1:6310/api/system/status
 Jenkins creates `jenkins_jenkins_network`. The SonarQube stack treats that network
 as external, so it must exist first. The SonarQube container joins this network
 and its own database network; PostgreSQL joins only the database network and
-publishes no host port. No Docker socket is mounted into the build agent.
+publishes no host port. The build agent uses the host Docker socket for the image stages described in
+the [GHCR publishing tutorial](ghcr-publishing.md).
 
 The first startup downloads images and initializes the database and search
 indexes. `sonarqube-up` waits up to seven minutes for healthy services. Expect
@@ -209,7 +210,7 @@ The CI pipeline:
    directly from the repository root, using `JAVA_HOME` for the Java analysis
    runtime. One submission includes Java, TypeScript, HTML and CSS.
 4. Releases the agent executor and waits up to ten minutes for the quality
-   gate. Any non-OK status or timeout fails CI. The overall timeout is one hour.
+   gate. Any non-OK status or timeout fails CI. The overall pipeline timeout is 90 minutes, including image publishing.
 
 Java coverage comes from the four tested services' JaCoCo XML files; frontend
 coverage comes from `frontend/coverage/frontend/lcov.info`. Discovery source and
@@ -293,8 +294,10 @@ To scan manually from a development machine, install the same CLI on `PATH`
 and Java 21 with `JAVA_HOME` set. Run `make verify` first, then run
 `make sonar-scan` with `SONAR_HOST_URL` and `SONAR_TOKEN` supplied through the
 process environment. This target uses the static paths in
-`sonar-project.properties`; it does not build the application or read `.env`. GitHub build triggers, image publishing, deployment and
-notifications are separate follow-up work; this job is triggered manually.
+`sonar-project.properties`; it does not build the application or read `.env`.
+After the quality gate, CI builds and publishes images as described in the
+[GHCR publishing tutorial](ghcr-publishing.md). GitHub triggers, deployment and
+notifications are follow-up work; this job is triggered manually.
 
 ## Verify the installation
 

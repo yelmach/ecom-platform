@@ -15,6 +15,8 @@ services:
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD}
       JENKINS_REPOSITORY_URL: ${JENKINS_REPOSITORY_URL}
       JENKINS_REPOSITORY_BRANCH: ${JENKINS_REPOSITORY_BRANCH}
+      GHCR_USERNAME: ${GHCR_USERNAME}
+      GHCR_TOKEN: ${GHCR_TOKEN}
     volumes:
       - jenkins_home:/var/jenkins_home
     networks:
@@ -30,6 +32,10 @@ services:
     build:
       context: ./agent
     init: true
+    group_add:
+      - "${DOCKER_GID}"
+    environment:
+      GHCR_PREFIX: ${GHCR_PREFIX}
     restart: unless-stopped
     depends_on:
       jenkins:
@@ -45,6 +51,11 @@ services:
       - -workDir
       - /home/jenkins/agent
     volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
       - agent_work:/home/jenkins/agent
       - maven_cache:/home/jenkins/.m2
       - npm_cache:/home/jenkins/.npm

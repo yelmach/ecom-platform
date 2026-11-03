@@ -73,7 +73,8 @@ All Jenkins infrastructure lives under `infra/jenkins/`:
 | [controller/plugins.txt](../infra/jenkins/controller/plugins.txt) | Lists the required plugins with explicit versions. Dependencies are resolved by the plugin installer. |
 | [controller/jenkins.yaml](../infra/jenkins/controller/jenkins.yaml) | Declares the administrator, permissions, public URL, executors and agent using Jenkins Configuration as Code (JCasC). |
 | [controller/jobs/agent-check.groovy](../infra/jenkins/controller/jobs/agent-check.groovy) | Uses Job DSL to create or update the `agent-check` job and point it at the repository's Jenkinsfile. |
-| [controller/.dockerignore](../infra/jenkins/controller/.dockerignore) | Limits the controller build context to its Dockerfile, plugin list, YAML and job scripts. |
+| [controller/init.groovy.d/ghcr-credentials.groovy](../infra/jenkins/controller/init.groovy.d/ghcr-credentials.groovy) | Creates or updates the GHCR credential at startup without replacing other credentials. |
+| [controller/.dockerignore](../infra/jenkins/controller/.dockerignore) | Limits the controller build context to configuration, job and startup files. |
 | [agent/Dockerfile](../infra/jenkins/agent/Dockerfile) | Extends the inbound-agent image with Node 24/npm, Git, Make, Chromium, Python, native build tools and SonarScanner CLI. Java 21 comes from the base image. |
 | [agent/.dockerignore](../infra/jenkins/agent/.dockerignore) | Limits the agent build context to its Dockerfile. |
 | [agent-check.Jenkinsfile](../infra/jenkins/agent-check.Jenkinsfile) | Defines the verification stages executed by the agent. |
@@ -141,7 +142,15 @@ JENKINS_ADMIN_PASSWORD='REPLACE_WITH_A_STRONG_PASSWORD'
 JENKINS_REPOSITORY_URL=https://github.com/yelmach/ecom-platform.git
 JENKINS_REPOSITORY_BRANCH=deployment
 JENKINS_AGENT_SECRET=
+GHCR_PREFIX=ghcr.io/yelmach
+GHCR_USERNAME=yelmach
+GHCR_TOKEN='REPLACE_WITH_YOUR_GITHUB_TOKEN'
 ```
+
+Make automatically supplies the host socket group ID to Compose so the agent
+can use Docker. A startup script creates or updates `ghcr-push` from `GHCR_USERNAME` and
+`GHCR_TOKEN` when both are supplied, preserving other credentials. Empty values
+leave any existing credential untouched. See the [GHCR publishing tutorial](ghcr-publishing.md) for details.
 
 Use a real strong password and the branch containing the Jenkins files. Single
 quotes prevent Compose from interpreting `$` inside a password; use a password
@@ -339,10 +348,14 @@ definition, are reapplied on startup; dashboard edits to those settings may be
 overwritten. Rebuild the agent with `make jenkins-agent-up` after changing its
 Dockerfile. An unchanged `make jenkins-up` does not force a restart.
 
-No host Docker socket or application data volumes are mounted into this Jenkins
-stack. SonarQube connects to its network as described in the
+The build agent mounts the host Docker socket for image builds and publishing.
+Make detects the socket group ID when starting the agent; see the
+[GHCR publishing tutorial](ghcr-publishing.md). Docker access gives trusted
+pipeline code control over the host Docker engine. No application data volumes
+are mounted directly into the agent. SonarQube connects to its network as
+described in the
 [SonarQube tutorial](sonarqube-setup.md); stop that stack before removing the Jenkins
-network. The current agent does not provide Docker image-building or deployment access.
+network. The pipeline publishes images; application deployment remains manual.
 
 ## Troubleshooting
 

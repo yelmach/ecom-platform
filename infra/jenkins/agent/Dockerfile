@@ -1,4 +1,5 @@
 FROM node:24-bookworm-slim AS node
+FROM docker:29.9.2-cli AS docker
 
 FROM jenkins/inbound-agent:jdk21
 
@@ -11,6 +12,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node /usr/local/ /usr/local/
+COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 RUN curl -fsSL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.1.0.6389.zip -o /tmp/sonar-scanner.zip \
     && unzip -q /tmp/sonar-scanner.zip -d /opt \

@@ -2,7 +2,7 @@ def repositoryUrl = System.getenv('JENKINS_REPOSITORY_URL')
 def repositoryBranch = System.getenv('JENKINS_REPOSITORY_BRANCH')
 
 pipelineJob('ecom-ci') {
-    description('Build, test and analyze the app, then enforce its SonarQube quality gate.')
+    description('Build, test and analyze the app, enforce its quality gate, then publish ARM64 images to GHCR.')
     definition {
         cpsScm {
             scm {

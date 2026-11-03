@@ -25,6 +25,9 @@ pipeline {
                     make --version
                     "$CHROME_BIN" --version
                     sonar-scanner --version
+                    docker version
+                    docker buildx version
+                    docker buildx inspect default
                     test -w /home/jenkins/agent
                     test -w /home/jenkins/.m2
                     test -w /home/jenkins/.npm

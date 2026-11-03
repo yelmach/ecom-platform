@@ -2,7 +2,7 @@ COMPOSE_ENV := .env
 .DEFAULT_GOAL := dev-up
 COMPOSE_DEV := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.dev.yml
 COMPOSE_PROD := docker compose --env-file .env -f docker-compose.yml
-COMPOSE_JENKINS := docker compose --env-file .env -f infra/jenkins/docker-compose.yml
+COMPOSE_JENKINS := DOCKER_GID="$$(stat -c '%g' /var/run/docker.sock)" docker compose --env-file .env -f infra/jenkins/docker-compose.yml
 COMPOSE_SONAR := docker compose --env-file .env -f infra/sonarqube/docker-compose.yml
 DEV_INFRA_SERVICES := mongo minio discovery-service kafka
 BACKEND_SERVICES := discovery-service gateway-service user-service product-service media-service
@@ -51,7 +51,7 @@ jenkins-agent-logs:
 	$(COMPOSE_JENKINS) logs --tail=100 -f agent
 
 jenkins-agent-check:
-	$(COMPOSE_JENKINS) exec -T agent sh -ec 'uname -m; java -version; node --version; npm --version; git --version; make --version; "$$CHROME_BIN" --version; sonar-scanner --version; test -w /home/jenkins/agent; test -w /home/jenkins/.m2; test -w /home/jenkins/.npm; test -w "$$SONAR_USER_HOME"'
+	$(COMPOSE_JENKINS) exec -T agent sh -ec 'uname -m; java -version; node --version; npm --version; git --version; make --version; "$$CHROME_BIN" --version; sonar-scanner --version; docker version; docker buildx version; docker buildx inspect default; test -w /home/jenkins/agent; test -w /home/jenkins/.m2; test -w /home/jenkins/.npm; test -w "$$SONAR_USER_HOME"'
 
 prod-config:
 	$(COMPOSE_PROD) config --quiet

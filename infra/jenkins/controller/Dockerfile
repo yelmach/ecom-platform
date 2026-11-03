@@ -5,3 +5,4 @@ RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
 COPY jenkins.yaml /usr/share/jenkins/config/jenkins.yaml
 COPY jobs/ /usr/share/jenkins/config/jobs/
+COPY init.groovy.d/ghcr-credentials.groovy /usr/share/jenkins/ref/init.groovy.d/ghcr-credentials.groovy.override
