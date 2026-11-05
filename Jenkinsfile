@@ -18,6 +18,7 @@ pipeline {
                         script {
                             env.VERIFIED_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                             env.IMAGE_TAG = env.VERIFIED_COMMIT.take(12)
+                            env.DEPLOY_TARGET = env.APP_DOMAIN
                             env.SOURCE_URL = scm.userRemoteConfigs[0].url.replaceFirst(/\.git$/, '')
                         }
                     }
@@ -107,6 +108,44 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+        stage('Approve deployment') {
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    input message: "Deploy ${env.IMAGE_TAG} (${env.VERIFIED_COMMIT}) to https://${env.DEPLOY_TARGET}?",
+                        ok: 'Deploy'
+                }
+            }
+        }
+        stage('Deploy to Oracle') {
+            agent { label 'arm64' }
+            options { timeout(time: 25, unit: 'MINUTES') }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'git checkout --detach "$VERIFIED_COMMIT"'
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'oracle-deploy-key', keyFileVariable: 'DEPLOY_KEY', usernameVariable: 'DEPLOY_SSH_USER'),
+                    file(credentialsId: 'oracle-known-hosts', variable: 'DEPLOY_KNOWN_HOSTS')
+                ]) {
+                    sh '''
+                        set +x
+                        set -eu
+                        incoming="$DEPLOY_DIR/.deploy/incoming"
+                        git archive "$VERIFIED_COMMIT" docker-compose.yml deploy/deploy.sh | \
+                            ssh -i "$DEPLOY_KEY" -p "$DEPLOY_PORT" \
+                                -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+                                -o UserKnownHostsFile="$DEPLOY_KNOWN_HOSTS" -o ConnectTimeout=10 \
+                                "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
+                                "set -eu; umask 077; mkdir -p '$incoming'; trap 'rm -rf $incoming' EXIT; tar -xf - -C '$incoming'; bash '$incoming/deploy/deploy.sh' '$IMAGE_TAG' '$DEPLOY_DIR' '$incoming/docker-compose.yml'"
+                    '''
+                }
+            }
+            post {
+                success { echo "Deployed ${env.IMAGE_TAG} to https://${env.DEPLOY_TARGET}" }
+                failure { echo 'Deployment failed. Check the rollback result in this build log.' }
+                aborted { echo 'Deployment interrupted. Check production health before retrying.' }
             }
         }
     }

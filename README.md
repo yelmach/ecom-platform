@@ -24,109 +24,108 @@ Frontend:
 
 ## Service docs
 
-- `backend/discovery-service/README.md`
-- `backend/gateway-service/README.md`
-- `backend/user-service/README.md`
-- `backend/product-service/README.md`
-- `backend/media-service/README.md`
+- [discovery-service](backend/discovery-service/README.md)
+- [gateway-service](backend/gateway-service/README.md)
+- [user-service](backend/user-service/README.md)
+- [product-service](backend/product-service/README.md)
+- [media-service](backend/media-service/README.md)
 
-## Config files
+## Choose how to run the project
 
-- `.env` contains Docker-network settings for both Compose workflows.
-- `.env.local` contains host-local settings for manually launched services and Angular.
-- `.env.example` and `.env.local.example` are the committed templates.
-- Use different `.env` values on your laptop and VM; never reuse development credentials in production.
-- Mongo logical DB isolation uses:
-  - `MONGO_USER_DATABASE`
-  - `MONGO_PRODUCT_DATABASE`
-  - `MONGO_MEDIA_DATABASE`
-    on the same MongoDB instance.
+| Mode | What runs in Docker | What runs on your computer/VM |
+| --- | --- | --- |
+| Full Docker development | All application services and infrastructure, built from source | Browser |
+| Local application development | MongoDB, MinIO, Kafka and Eureka | Four business/gateway services and Angular |
+| All Java services locally | MongoDB, MinIO and Kafka | All five Java services and Angular |
+| Manual production | Published application images and infrastructure | Caddy on Ubuntu |
+| Jenkins deployment | Same production stack plus separate Jenkins/SonarQube stacks | Caddy on Ubuntu; deployment runs through SSH |
 
-## One-time setup
+Run commands from the repository root unless a command changes directory.
+Local development modes share ports, so stop one mode before starting another.
+Jenkins and SonarQube are not required to develop the application locally.
 
-Copy the environment templates before starting the application:
+## One-time local setup
+
+Install Docker Engine with Compose, Git, Make and OpenSSL. For services running outside
+Docker, also install Java 21 and Node 24/npm. Chrome/Chromium is needed
+when running frontend tests. Production prerequisites are in the
+[manual deployment tutorial](docs/manual-deployment.md).
+
+For a fresh checkout, create the private environment files:
 
 ```bash
 cp .env.example .env
 cp .env.local.example .env.local
 ```
 
-For an existing checkout, preserve your current credentials and Kafka cluster ID.
-Docker infrastructure credentials in `.env` must agree with `.env.local` when
-running services from the IDE. No self-signed HTTPS certificates are needed.
-Public production HTTPS terminates at Caddy; internal traffic uses HTTP.
-See [Oracle deployment](docs/oracle-deployment.md) for VM settings.
+Preserve existing files when updating. Use different credentials on your laptop
+and production VM.
 
-### Generate JWT RSA keys (user-service signs, gateway verifies)
+| File | Purpose |
+| --- | --- |
+| `.env` | Docker service configuration and credentials; Jenkins/SonarQube settings when used |
+| `.env.local` | Host-local endpoints for Java services and Angular |
+| `.deploy/current/image-tag` | Active production image tag; never put `IMAGE_TAG` in `.env` |
+
+For local services connecting to Docker infrastructure, MongoDB and MinIO
+credentials in both environment files must agree. `.env.local` uses host
+addresses such as `localhost:6210` and Kafka `localhost:6232`; `.env` uses Docker
+service names. The committed templates provide these defaults.
+
+For a new installation, generate JWT keys once:
 
 ```bash
 mkdir -p backend/keys
-openssl genpkey -algorithm RSA -out backend/keys/private.pem -pkeyopt rsa_keygen_bits:2048
+chmod 700 backend/keys
+(umask 077; openssl genpkey -algorithm RSA -out backend/keys/private.pem -pkeyopt rsa_keygen_bits:2048)
 openssl pkey -in backend/keys/private.pem -pubout -out backend/keys/public.pem
 ```
 
-## Migrating an existing local stack
+Keep existing keys when updating; replacing them invalidates existing tokens.
+Local development uses HTTP. Production HTTPS terminates at Caddy.
 
-After updating, run `make dev-up` to rebuild the frontend and recreate containers
-with the new ports; keep existing volumes. Open `http://localhost:6100`.
-For manual development, stop Docker application containers first (`make dev-down`),
-then use `make dev-infra-up` and launch the Java services and `npm start`.
-Full Docker mode and manual mode share frontend/Eureka ports, so run one mode at a time.
-Do not use `dev-down-v` to migrate ports: it deletes data. Existing TLS files may
-remain on disk but are no longer mounted or required. JWT keys remain required.
-
-## Launch modes
-
-### Full development stack (Dockerfile builds)
+## Run with Docker for development
 
 ```bash
 make dev-up
 ```
 
-Stop the stack with `make dev-down`, or use `make dev-down-v` to also remove volumes.
+This builds the images from the checkout and starts all nine services. Open
+`http://localhost:6100`. The default `make` command also starts this mode.
+Jenkins/GHCR credentials and a production image tag are not required.
 
-The development Compose file uses the pinned community build `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`.
-The previously configured `quay.io/minio/minio:latest` image is no longer publicly pullable.
-This replacement is published by [PGSTY](https://github.com/pgsty/silo/tree/minio), an independent MinIO fork; upstream MinIO now documents [source-only distribution](https://github.com/minio/minio#source-only-distribution).
-MinIO retains its service name and data volume; its API/console now use ports 6220/6221.
+Inspect and stop the stack:
 
-### Infrastructure-only development
+```bash
+docker compose --env-file .env -f docker-compose.dev.yml ps
+docker compose --env-file .env -f docker-compose.dev.yml logs --tail=100 -f
+make dev-down
+```
 
-1. Start infra (`mongo`, `minio`, `discovery-service`, `kafka`) from repo root:
+`dev-down` preserves data. `make dev-down-v` explicitly deletes development
+volumes; use it only when intending to reset MongoDB, MinIO and Kafka data.
+
+## Run application services locally
+
+If the full Docker stack is running, run `make dev-down` first to avoid port
+conflicts and duplicate service registrations. Start Docker infrastructure,
+including Eureka:
 
 ```bash
 make dev-infra-up
 ```
 
-To start only Kafka, run `make kafka-up`. Inspect it with `make kafka-logs`
-or list topics with `make kafka-topics`.
-
-Kafka uses the official `apache/kafka:4.3.1` image in single-node KRaft mode,
-with persistent storage and a health check. Docker services connect to
-`kafka:6230`; services running from the IDE connect to `localhost:6232`.
-Set `KAFKA_BOOTSTRAP_SERVERS` accordingly in `.env` and `.env.local` when
-adding the service producers and consumers. Topic auto-creation is disabled.
-Product service creates `product.events` and User service creates
-`user.events` at application startup using Spring Kafka `NewTopic` beans.
-Existing topics are reused. Start Kafka before either application;
-startup fails if Kafka is unavailable. `make kafka-up` starts only the broker.
-See [Kafka events](docs/kafka-events.md) for the event payloads.
-
-Product deletion, detached-image cleanup, and avatar replacement/clearing cleanup are implemented.
-The `kafka-data` volume preserves broker state; `make dev-down-v` removes it
-along with the other development volumes.
-
-2. Run backend services manually (each in a separate terminal). Start product
-and user services first so they create the topics consumed by media service:
+Run each command below from the repository root in its **own terminal**. Start
+user/product before media so their Kafka topics are available:
 
 ```bash
-cd backend/product-service && ./mvnw spring-boot:run
 cd backend/user-service && ./mvnw spring-boot:run
+cd backend/product-service && ./mvnw spring-boot:run
 cd backend/media-service && ./mvnw spring-boot:run
 cd backend/gateway-service && ./mvnw spring-boot:run
 ```
 
-3. Run frontend:
+In another terminal, start Angular:
 
 ```bash
 cd frontend
@@ -134,14 +133,39 @@ npm ci
 npm start
 ```
 
-4. Stop infra:
+Java services load root `.env.local` relative to their service directories;
+`npm start` also reads `.env.local`. Open `http://localhost:6100`.
+
+Stop the local processes with Ctrl+C, then stop infrastructure:
 
 ```bash
 make dev-infra-down
 ```
 
-In this mode, manually launched backend services load host-local values from root `.env.local`.
-Frontend in dev mode still runs manually with `npm start`.
+### Run Eureka locally too
+
+If you want all five Java services in your IDE, start only the three backing
+services in Docker instead of `make dev-infra-up`:
+
+```bash
+docker compose --env-file .env -f docker-compose.dev.yml up -d mongo minio kafka
+```
+
+Start discovery first in its own terminal:
+
+```bash
+cd backend/discovery-service && ./mvnw spring-boot:run
+```
+
+Then run the same four services and Angular commands above. Stop all local
+processes before stopping Docker infrastructure with `make dev-infra-down`.
+If switching from a full Docker stack, run `make dev-down` first so Docker
+application services do not compete for ports or register duplicate instances.
+
+Kafka topic auto-creation is disabled. User and product services create their
+application topics at startup; Kafka must be ready before starting them.
+`make kafka-up`, `make kafka-logs` and `make kafka-topics` provide individual
+broker operations. See [Kafka events](docs/kafka-events.md) for event details.
 
 ## Main URLs
 
@@ -177,23 +201,90 @@ On the VM use `https://ecom.yelmach.com`. CORS is configured by the gateway's
 local `MEDIA_PUBLIC_BASE_URL=http://localhost:6100/ecom-media`, production
 `MEDIA_PUBLIC_BASE_URL=https://ecom.yelmach.com/ecom-media`.
 
-## Production on Oracle
+## Run production manually on Oracle
 
-`docker-compose.yml` uses `.env` and pulls versioned GHCR images. Only the
-frontend is published, on `127.0.0.1:6100`, for host-installed Caddy to proxy
-`https://ecom.yelmach.com`. HTTP is used on loopback and the Docker network;
-public TLS terminates at Caddy. This setup does not encrypt internal service traffic.
-Production uses the separate `ecom-prod` Compose project and persistent volumes.
+Follow [manual deployment](docs/manual-deployment.md) to prepare Ubuntu, private
+`.env`, JWT keys, published ARM64 images, the Cloudflare record and Caddy.
+Production uses the separate `ecom-prod` project and persistent volumes.
+Only frontend port `127.0.0.1:6100` is published; Caddy serves
+`https://ecom.yelmach.com`. Service traffic inside Docker remains HTTP.
 
-See [Oracle deployment](docs/oracle-deployment.md) for environment setup, JWT
-keys, GHCR access, Caddy configuration, and verification. Images must be
-published before the first deployment. Follow the [Jenkins setup tutorial](docs/jenkins-setup.md)
-for the controller and build agent, including their files and commands. The
-[SonarQube tutorial](docs/sonarqube-setup.md) covers analysis and the Jenkins quality
-gate. The [GHCR publishing tutorial](docs/ghcr-publishing.md) covers ARM64 image
-builds and publishing. Automated deployment and notifications follow.
+For the first installation, save the production Compose file and the published
+tag separately. Use the Compose file matching those published images:
 
-## Build and test baseline
+```bash
+mkdir -p .deploy/current
+cp docker-compose.yml .deploy/current/docker-compose.yml
+printf '%s\n' YOUR_PUBLISHED_IMAGE_TAG > .deploy/current/image-tag
+```
+
+Then run directly, without production Make targets:
+
+```bash
+export IMAGE_TAG="$(cat .deploy/current/image-tag)"
+docker compose --env-file .env --project-directory "$PWD" -f .deploy/current/docker-compose.yml pull
+docker compose --env-file .env --project-directory "$PWD" -f .deploy/current/docker-compose.yml up -d --no-build --wait --wait-timeout 300
+docker compose --env-file .env --project-directory "$PWD" -f .deploy/current/docker-compose.yml ps
+```
+
+Check `https://ecom.yelmach.com`. For logs, use the same file/environment with
+`logs --tail=100 -f`. To intentionally stop production, use `down` with that file
+and tag; do not add `-v` unless destroying its data is intended.
+
+For a later release with rollback checks, call the script from a tested checkout:
+
+```bash
+bash deploy/deploy.sh NEW_IMAGE_TAG "$PWD" "$PWD/docker-compose.yml"
+```
+
+The script uses `.deploy/current` and `.deploy/rollback`, each containing a
+Compose file and `image-tag`. It keeps root `.env`, root Compose and keys
+unchanged. Backups are manual; container rollback does not reverse data changes.
+
+## Run CI and approved deployment with Jenkins
+
+Follow these tutorials in order:
+
+1. [Jenkins setup](docs/jenkins-setup.md): controller, agent and configuration in code.
+2. [SonarQube setup](docs/sonarqube-setup.md): server, project, credentials and signed webhook.
+3. [Manual deployment](docs/manual-deployment.md): establish the first working production version.
+4. [GHCR deployment](docs/ghcr-deployment.md): registry credentials, SSH setup, publishing and deployment.
+
+Images must be available for the initial manual deployment. The manual tutorial
+includes native image build/push commands; use them if no release exists yet.
+
+After configuration, start the tooling with:
+
+```bash
+make jenkins-up
+make jenkins-agent-up
+make sonarqube-up
+make jenkins-agent-check
+```
+
+Open `https://jenkins.yelmach.com`, run **ecom-ci**, and approve the release after
+publishing. SonarQube is available at `https://sonar.yelmach.com`.
+
+```text
+Checkout → Build/test → SonarQube → Quality gate → Build/push images
+→ Manual approval → SSH → Apply Compose → Local health checks → Success or rollback
+```
+
+The pipeline currently uses the configured `deployment` branch and manual job
+execution. Local failures trigger one rollback attempt. Public-only check failures
+print warnings without failing an otherwise healthy deployment. GitHub triggers,
+automatic `main` deployment and external notifications are later work.
+
+Stop SonarQube before removing the Jenkins network:
+
+```bash
+make sonarqube-down
+make jenkins-down
+```
+
+These commands retain tooling data volumes and do not stop the separate app stack.
+
+## Build and test without starting the application
 
 Prerequisites: Java 21, Node.js (Angular accepts `^20.19.0`, `^22.12.0`, or
 `>=24.0.0`; this baseline was checked with Node 24), npm, and Chrome/Chromium.

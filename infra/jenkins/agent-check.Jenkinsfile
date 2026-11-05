@@ -28,6 +28,7 @@ pipeline {
                     docker version
                     docker buildx version
                     docker buildx inspect default
+                    ssh -V
                     test -w /home/jenkins/agent
                     test -w /home/jenkins/.m2
                     test -w /home/jenkins/.npm

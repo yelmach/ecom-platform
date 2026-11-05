@@ -7,7 +7,7 @@ USER root
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    git curl ca-certificates make chromium \
+    git curl ca-certificates make chromium openssh-client \
     python3 build-essential libatomic1 unzip \
     && rm -rf /var/lib/apt/lists/*
 

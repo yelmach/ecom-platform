@@ -43,7 +43,7 @@ npm start
 
 Open `http://localhost:6100`. No TLS certificates or `start:https` command are
 needed. API calls and image URLs use the same frontend origin. For production,
-see [Oracle deployment](../docs/oracle-deployment.md).
+see [Oracle deployment](../docs/manual-deployment.md).
 
 ## How runtime configuration works
 

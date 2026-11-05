@@ -32,10 +32,16 @@ services:
     build:
       context: ./agent
     init: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     group_add:
       - "${DOCKER_GID}"
     environment:
       GHCR_PREFIX: ${GHCR_PREFIX}
+      APP_DOMAIN: ${APP_DOMAIN}
+      DEPLOY_HOST: ${DEPLOY_HOST}
+      DEPLOY_PORT: ${DEPLOY_PORT}
+      DEPLOY_DIR: ${DEPLOY_DIR}
     restart: unless-stopped
     depends_on:
       jenkins:

@@ -31,3 +31,7 @@ Thumbs.db
 
 # Uploads
 uploads/
+
+# Deployment state
+.deploy/
+.deploy-env-*

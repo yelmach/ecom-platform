@@ -89,7 +89,7 @@ Jenkins creates `jenkins_jenkins_network`. The SonarQube stack treats that netwo
 as external, so it must exist first. The SonarQube container joins this network
 and its own database network; PostgreSQL joins only the database network and
 publishes no host port. The build agent uses the host Docker socket for the image stages described in
-the [GHCR publishing tutorial](ghcr-publishing.md).
+the [GHCR publishing tutorial](ghcr-deployment.md).
 
 The first startup downloads images and initializes the database and search
 indexes. `sonarqube-up` waits up to seven minutes for healthy services. Expect
@@ -194,10 +194,14 @@ make jenkins-agent-up
 make jenkins-agent-check
 ```
 
-Confirm `jenkins-agent` is online and open the automatically created **ecom-ci**
-job. Start it manually with **Build Now**. The root Jenkinsfile always runs the
-full verification; it does not have the quick job's optional test parameter.
-The existing `agent-check` job remains useful for checking infrastructure.
+Confirm `jenkins-agent` is online. Before running the automatically created
+**ecom-ci** job, complete the registry credentials, SSH credentials and current
+deployment initialization in the [GHCR deployment tutorial](ghcr-deployment.md).
+The job also publishes and deploys after its quality gate, so those settings
+are needed for a complete run. Start it manually with **Build Now**.
+The root Jenkinsfile always runs full verification; it does not have the quick
+job's optional test parameter. The existing `agent-check` job remains useful
+for checking infrastructure.
 
 The CI pipeline:
 
@@ -210,7 +214,7 @@ The CI pipeline:
    directly from the repository root, using `JAVA_HOME` for the Java analysis
    runtime. One submission includes Java, TypeScript, HTML and CSS.
 4. Releases the agent executor and waits up to ten minutes for the quality
-   gate. Any non-OK status or timeout fails CI. The overall pipeline timeout is 90 minutes, including image publishing.
+   gate. Any non-OK status or timeout fails CI. The overall pipeline timeout is 60 minutes, shared with image publishing, approval and deployment.
 
 Java coverage comes from the four tested services' JaCoCo XML files; frontend
 coverage comes from `frontend/coverage/frontend/lcov.info`. Discovery source and
@@ -295,8 +299,9 @@ and Java 21 with `JAVA_HOME` set. Run `make verify` first, then run
 `make sonar-scan` with `SONAR_HOST_URL` and `SONAR_TOKEN` supplied through the
 process environment. This target uses the static paths in
 `sonar-project.properties`; it does not build the application or read `.env`.
-After the quality gate, CI builds and publishes images as described in the
-[GHCR publishing tutorial](ghcr-publishing.md). GitHub triggers, deployment and
+After the quality gate, CI builds and publishes images, then deploys after
+approval, as described in the [GHCR deployment tutorial](ghcr-deployment.md).
+GitHub triggers and external
 notifications are follow-up work; this job is triggered manually.
 
 ## Verify the installation

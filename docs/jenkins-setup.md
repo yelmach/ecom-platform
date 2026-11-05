@@ -75,10 +75,10 @@ All Jenkins infrastructure lives under `infra/jenkins/`:
 | [controller/jobs/agent-check.groovy](../infra/jenkins/controller/jobs/agent-check.groovy) | Uses Job DSL to create or update the `agent-check` job and point it at the repository's Jenkinsfile. |
 | [controller/init.groovy.d/ghcr-credentials.groovy](../infra/jenkins/controller/init.groovy.d/ghcr-credentials.groovy) | Creates or updates the GHCR credential at startup without replacing other credentials. |
 | [controller/.dockerignore](../infra/jenkins/controller/.dockerignore) | Limits the controller build context to configuration, job and startup files. |
-| [agent/Dockerfile](../infra/jenkins/agent/Dockerfile) | Extends the inbound-agent image with Node 24/npm, Git, Make, Chromium, Python, native build tools and SonarScanner CLI. Java 21 comes from the base image. |
+| [agent/Dockerfile](../infra/jenkins/agent/Dockerfile) | Extends the inbound-agent image with Node 24/npm, Git, Make, Chromium, Python, native build tools, SonarScanner CLI and the SSH client. Java 21 comes from the base image. |
 | [agent/.dockerignore](../infra/jenkins/agent/.dockerignore) | Limits the agent build context to its Dockerfile. |
-| [agent-check.Jenkinsfile](../infra/jenkins/agent-check.Jenkinsfile) | Defines the verification stages executed by the agent. |
-| [Root Jenkinsfile](../Jenkinsfile) | Builds/tests the application, runs SonarQube analysis and enforces its quality gate. |
+| [agent-check.Jenkinsfile](../infra/jenkins/agent-check.Jenkinsfile) | Defines the infrastructure verification stages executed by the agent. |
+| [Root Jenkinsfile](../Jenkinsfile) | Builds/tests the application, checks its quality gate, publishes images and deploys after approval. |
 | [CI job definition](../infra/jenkins/controller/jobs/ecom-ci.groovy) | Creates the `ecom-ci` job pointing at the root Jenkinsfile. |
 
 The root [Makefile](../Makefile) wraps Compose commands. The root
@@ -144,13 +144,15 @@ JENKINS_REPOSITORY_BRANCH=deployment
 JENKINS_AGENT_SECRET=
 GHCR_PREFIX=ghcr.io/yelmach
 GHCR_USERNAME=yelmach
-GHCR_TOKEN='REPLACE_WITH_YOUR_GITHUB_TOKEN'
+GHCR_TOKEN=
 ```
 
 Make automatically supplies the host socket group ID to Compose so the agent
 can use Docker. A startup script creates or updates `ghcr-push` from `GHCR_USERNAME` and
 `GHCR_TOKEN` when both are supplied, preserving other credentials. Empty values
-leave any existing credential untouched. See the [GHCR publishing tutorial](ghcr-publishing.md) for details.
+leave any existing credential untouched. Leave the token blank for the initial
+`agent-check` setup; configure publishing later using the
+[GHCR deployment tutorial](ghcr-deployment.md).
 
 Use a real strong password and the branch containing the Jenkins files. Single
 quotes prevent Compose from interpreting `$` inside a password; use a password
@@ -255,7 +257,7 @@ internal controller URL and WebSocket option from Compose. It runs as the
 `jenkins` user rather than root. Check that the node is **online** in Jenkins.
 
 The tool check should print `aarch64` on Oracle, Java 21, Node 24/npm, Git, Make
-and Chromium. It also checks write access to the workspace and caches. If the
+Chromium, Docker, SonarScanner and SSH. It also checks write access to the workspace and caches. If the
 node remains offline, inspect:
 
 ```bash
@@ -346,16 +348,18 @@ and run `make jenkins-up` to rebuild/recreate the controller when needed.
 Code-managed settings, including the configured administrator password and job
 definition, are reapplied on startup; dashboard edits to those settings may be
 overwritten. Rebuild the agent with `make jenkins-agent-up` after changing its
-Dockerfile. An unchanged `make jenkins-up` does not force a restart.
+Dockerfile. Deployment settings are described in the
+[deployment tutorial](ghcr-deployment.md). An unchanged `make jenkins-up` does not force a restart.
 
 The build agent mounts the host Docker socket for image builds and publishing.
 Make detects the socket group ID when starting the agent; see the
-[GHCR publishing tutorial](ghcr-publishing.md). Docker access gives trusted
+[GHCR publishing tutorial](ghcr-deployment.md). Docker access gives trusted
 pipeline code control over the host Docker engine. No application data volumes
 are mounted directly into the agent. SonarQube connects to its network as
 described in the
 [SonarQube tutorial](sonarqube-setup.md); stop that stack before removing the Jenkins
-network. The pipeline publishes images; application deployment remains manual.
+network. After publishing, the pipeline can deploy through SSH after approval;
+configure its two SSH credentials using [automated deployment](ghcr-deployment.md).
 
 ## Troubleshooting
 

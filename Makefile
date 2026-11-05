@@ -1,13 +1,12 @@
 COMPOSE_ENV := .env
 .DEFAULT_GOAL := dev-up
 COMPOSE_DEV := docker compose --env-file $(COMPOSE_ENV) -f docker-compose.dev.yml
-COMPOSE_PROD := docker compose --env-file .env -f docker-compose.yml
 COMPOSE_JENKINS := DOCKER_GID="$$(stat -c '%g' /var/run/docker.sock)" docker compose --env-file .env -f infra/jenkins/docker-compose.yml
 COMPOSE_SONAR := docker compose --env-file .env -f infra/sonarqube/docker-compose.yml
 DEV_INFRA_SERVICES := mongo minio discovery-service kafka
 BACKEND_SERVICES := discovery-service gateway-service user-service product-service media-service
 
-.PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down kafka-up kafka-logs kafka-topics verify verify-backend verify-frontend prod-config prod-pull prod-up prod-down prod-ps prod-logs
+.PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down kafka-up kafka-logs kafka-topics verify verify-backend verify-frontend
 .PHONY: jenkins-config jenkins-up jenkins-agent-up jenkins-down jenkins-ps jenkins-logs jenkins-agent-logs jenkins-agent-check
 .PHONY: sonarqube-config sonarqube-up sonarqube-ps sonarqube-logs sonarqube-down sonar-scan
 
@@ -51,25 +50,7 @@ jenkins-agent-logs:
 	$(COMPOSE_JENKINS) logs --tail=100 -f agent
 
 jenkins-agent-check:
-	$(COMPOSE_JENKINS) exec -T agent sh -ec 'uname -m; java -version; node --version; npm --version; git --version; make --version; "$$CHROME_BIN" --version; sonar-scanner --version; docker version; docker buildx version; docker buildx inspect default; test -w /home/jenkins/agent; test -w /home/jenkins/.m2; test -w /home/jenkins/.npm; test -w "$$SONAR_USER_HOME"'
-
-prod-config:
-	$(COMPOSE_PROD) config --quiet
-
-prod-pull:
-	$(COMPOSE_PROD) pull
-
-prod-up:
-	$(COMPOSE_PROD) up -d --no-build --wait --wait-timeout 300
-
-prod-down:
-	$(COMPOSE_PROD) down
-
-prod-ps:
-	$(COMPOSE_PROD) ps
-
-prod-logs:
-	$(COMPOSE_PROD) logs --tail=100 -f
+	$(COMPOSE_JENKINS) exec -T agent sh -ec 'uname -m; java -version; node --version; npm --version; git --version; make --version; "$$CHROME_BIN" --version; sonar-scanner --version; docker version; docker buildx version; docker buildx inspect default; ssh -V; test -w /home/jenkins/agent; test -w /home/jenkins/.m2; test -w /home/jenkins/.npm; test -w "$$SONAR_USER_HOME"'
 
 # Keep frontend build and tests sequential, including when make is run with -j.
 verify:
