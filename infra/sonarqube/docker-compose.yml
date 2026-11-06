@@ -19,7 +19,8 @@ services:
       - sonar-network
 
   sonarqube:
-    image: sonarqube:26.10.0.133078-community
+    build:
+      context: .
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,7 +37,6 @@ services:
       nproc: 8192
     volumes:
       - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
     healthcheck:
       test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:9000/api/system/status | grep -Eq ''"status"[[:space:]]*:[[:space:]]*"UP"''']
@@ -52,7 +52,6 @@ services:
 volumes:
   postgres_data:
   sonarqube_data:
-  sonarqube_extensions:
   sonarqube_logs:
 
 networks:

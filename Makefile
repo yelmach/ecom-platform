@@ -8,13 +8,16 @@ BACKEND_SERVICES := discovery-service gateway-service user-service product-servi
 
 .PHONY: dev-up dev-down dev-down-v dev-infra-up dev-infra-down kafka-up kafka-logs kafka-topics verify verify-backend verify-frontend
 .PHONY: jenkins-config jenkins-up jenkins-agent-up jenkins-down jenkins-ps jenkins-logs jenkins-agent-logs jenkins-agent-check
-.PHONY: sonarqube-config sonarqube-up sonarqube-ps sonarqube-logs sonarqube-down sonar-scan
+.PHONY: sonarqube-config sonarqube-build sonarqube-up sonarqube-ps sonarqube-logs sonarqube-down sonar-scan
 
 sonarqube-config:
 	$(COMPOSE_SONAR) config --quiet
 
+sonarqube-build:
+	$(COMPOSE_SONAR) build --pull sonarqube
+
 sonarqube-up:
-	$(COMPOSE_SONAR) up -d --wait --wait-timeout 420
+	$(COMPOSE_SONAR) up -d --build --wait --wait-timeout 420
 
 sonarqube-ps:
 	$(COMPOSE_SONAR) ps
