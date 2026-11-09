@@ -24,6 +24,10 @@ jenkins:
           inbound: {}
 
 unclassified:
+  githubpluginconfig:
+    hookSecretConfigs:
+      - credentialsId: "github-webhook-secret"
+        signatureAlgorithm: "SHA256"
   sonarglobalconfiguration:
     buildWrapperEnabled: true
     installations:
@@ -34,5 +38,4 @@ unclassified:
     url: "${JENKINS_PUBLIC_URL}"
 
 jobs:
-  - file: /usr/share/jenkins/config/jobs/agent-check.groovy
-  - file: /usr/share/jenkins/config/jobs/ecom-ci.groovy
+  - file: /usr/share/jenkins/config/jobs/ecom-platfrom.groovy
