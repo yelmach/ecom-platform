@@ -28,7 +28,7 @@
 - Validates every file in a product batch before uploading any file
 - If a later upload or metadata save fails, earlier saved images remain; the current object is deleted on a best-effort basis and remaining files are skipped
 - Avatar uploads save a new object and metadata without deleting the previous avatar.
-- User service validates ownership by media ID and saves the new `avatarMediaId`. Previous and unlinked avatars remain stored; replacement cleanup is deferred to a future Kafka implementation.
+- User service validates ownership by media ID and saves the new `avatarMediaId`. Replacing or clearing a saved avatar publishes `USER_AVATAR_CHANGED`; media consumes it to clean up the previous avatar. Unlinked uploads remain stored. See `docs/kafka-events.md` for retry and delivery limitations.
 - Failed upload/metadata-save cleanup for the current object remains in place.
 - Validates files:
   - JPEG and PNG only (GIF and WebP are unsupported)
@@ -54,7 +54,7 @@ Configuration stays in `config/`: `MediaProperties` binds and validates settings
 
 ## Configuration
 
-- `MEDIA_SERVICE_PORT` (default `8083`)
+- `MEDIA_SERVICE_PORT` (default `6203`)
 - `MONGO_*`, `EUREKA_*`
 - `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET`
 - `MEDIA_PUBLIC_BASE_URL`
@@ -88,4 +88,4 @@ cd backend/media-service
 
 `GET /media/images/{productId}` returns image metadata and object URLs. The browser loads those URLs through the gateway’s `/ecom-media/**` route directly from MinIO; media service does not stream image bytes.
 
-User service calls `GET /internal/media/avatars/{mediaId}/ownership` with `X-User-Id` before linking an avatar. There is no activation or replacement-cleanup endpoint. Old avatars remain stored until asynchronous cleanup is implemented. Internal endpoints are unavailable through the gateway. Deploy media's new endpoints before the updated user/product callers.
+User service calls `GET /internal/media/avatars/{mediaId}/ownership` with `X-User-Id` before linking an avatar. There is no activation or replacement-cleanup HTTP endpoint; replacement cleanup runs asynchronously through Kafka. Internal endpoints are unavailable through the gateway. Deploy media's new endpoints before the updated user/product callers.

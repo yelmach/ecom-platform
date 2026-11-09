@@ -41,7 +41,7 @@
 - Kafka (`KAFKA_BOOTSTRAP_SERVERS`); creates `product.events` at startup
 
 ## Configuration
-- `PRODUCT_SERVICE_PORT` (default `8082`)
+- `PRODUCT_SERVICE_PORT` (default `6202`)
 - `MONGO_*`, `EUREKA_*`
 
 ## Quick run

@@ -41,7 +41,7 @@ that bypasses the gateway.
 - JWT RSA key pair (`JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`)
 
 ## Configuration
-- `USER_SERVICE_PORT` (default `8081`)
+- `USER_SERVICE_PORT` (default `6201`)
 - `MONGO_*`, `EUREKA_*`, `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`
 - `JWT_EXPIRATION` as a duration such as `24h`
 - Media calls use `http://media-service` through Spring Cloud LoadBalancer, with 1-second connection and 3-second response timeouts.

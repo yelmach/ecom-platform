@@ -1,0 +1,41 @@
+jenkins:
+  numExecutors: 0
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    globalMatrix:
+      entries:
+        - user:
+            name: "${JENKINS_ADMIN_ID}"
+            permissions:
+              - "Overall/Administer"
+  nodes:
+    - permanent:
+        name: "jenkins-agent"
+        remoteFS: "/home/jenkins/agent"
+        numExecutors: 1
+        labelString: "arm64"
+        mode: EXCLUSIVE
+        launcher:
+          inbound: {}
+
+unclassified:
+  githubpluginconfig:
+    hookSecretConfigs:
+      - credentialsId: "github-webhook-secret"
+        signatureAlgorithm: "SHA256"
+  sonarglobalconfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: "sonarqube"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonarqube-token"
+  location:
+    url: "${JENKINS_PUBLIC_URL}"
+
+jobs:
+  - file: /usr/share/jenkins/config/jobs/ecom-platfrom.groovy

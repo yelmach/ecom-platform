@@ -1,0 +1,8 @@
+*
+!Dockerfile
+!plugins.txt
+!jenkins.yaml
+!jobs/
+!jobs/*.groovy
+!init.groovy.d/
+!init.groovy.d/*.groovy

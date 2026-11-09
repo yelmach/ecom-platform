@@ -5,3 +5,9 @@ dist
 .gitignore
 Dockerfile
 *.log
+
+.env
+.env.*
+*.pem
+coverage
+reports

@@ -4,3 +4,7 @@ target
 .vscode
 *.log
 *.tmp
+
+.env
+.env.*
+*.pem

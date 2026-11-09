@@ -13,8 +13,9 @@ Spring Boot configures `KafkaAdmin` automatically and creates missing topics
 from the beans. Existing topics are reused.
 
 Start Kafka with `make kafka-up`, then start the applications. They use
-`KAFKA_BOOTSTRAP_SERVERS` from `.env` (Docker: `kafka:9092`) or `.env.local`
-(IDE: `localhost:29092`). Startup fails if Kafka is unavailable.
+`KAFKA_BOOTSTRAP_SERVERS` from `.env` (Docker: `kafka:6230`) or `.env.local`
+(IDE: `localhost:6232`). Startup fails if Kafka is unavailable.
+Both Compose files read the Docker listener address and ports from `.env`.
 Start product and user services before media service so both topics exist.
 List the topics after starting product and user services with `make kafka-topics`.
 
@@ -32,6 +33,30 @@ Events use JSON values with `eventId`, `eventType`, `occurredAt` (UTC), and `pay
 Avatar IDs can be null: first selection has no previous avatar; clearing has no
 current avatar. Uploading an image alone does not trigger cleanup. Reordering
 product images or saving the same avatar emits no cleanup event.
+
+## Kafka cluster ID and listeners
+
+Generate a cluster ID before the first startup of a new Kafka data volume:
+
+```bash
+python3 -c 'import base64,uuid; print(base64.urlsafe_b64encode(uuid.uuid4().bytes).decode().rstrip("="))'
+```
+
+Set the result as `KAFKA_CLUSTER_ID` in `.env`. Keep it unchanged while reusing
+that volume; changing application ports does not require a new cluster ID.
+
+Development Kafka has three distinct listeners:
+
+| Listener | Configuration variable | Endpoint |
+| --- | --- | --- |
+| Docker services | `KAFKA_PORT` | `kafka:6230` |
+| KRaft controller | `KAFKA_CONTROLLER_PORT` | `kafka:6231` |
+| IDE/host applications | `KAFKA_HOST_PORT` | `localhost:6232` |
+
+The HOST listener and its advertised address both use `${KAFKA_HOST_PORT}`.
+`make kafka-topics` derives the internal endpoint from
+`KAFKA_ADVERTISED_LISTENERS`; no auxiliary port environment variable is needed.
+Production exposes only the internal and controller listeners.
 
 ## Product deletion (implemented)
 

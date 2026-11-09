@@ -16,7 +16,7 @@ public class CorsConfig {
     private final String allowedOrigins;
 
     public CorsConfig(
-            @Value("${cors.allowed-origins:https://localhost:4200,http://localhost:4200}") String allowedOrigins) {
+            @Value("${cors.allowed-origins:http://localhost:6100}") String allowedOrigins) {
         this.allowedOrigins = allowedOrigins;
     }
 

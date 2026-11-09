@@ -25,11 +25,11 @@ For authenticated requests, the gateway validates the JWT signature and time cla
 Public endpoints do not attempt JWT authentication, so an expired token cannot prevent public product browsing or login.
 
 ## Configuration
-- `GATEWAY_PORT` (Docker setup uses `8443`)
+- `GATEWAY_PORT` (Docker setup uses `6200`)
 - `JWT_PUBLIC_KEY_PATH`
 - `MINIO_ENDPOINT`
-- Optional TLS config via `GATEWAY_SSL_*`
-- `CORS_ALLOWED_ORIGINS` (defaults to `http://localhost:4200` and `https://localhost:4200`)
+- Gateway uses HTTP; production public HTTPS terminates at Caddy.
+- `CORS_ALLOWED_ORIGINS` (defaults to `http://localhost:6100`)
 
 ## Quick run
 ```bash

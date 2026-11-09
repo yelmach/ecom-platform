@@ -1,17 +1,80 @@
+name: ecom-prod
+
+x-runtime: &runtime
+  restart: unless-stopped
+  networks: [ecom-network]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-eureka-environment: &eureka-environment
+  EUREKA_HOST: ${EUREKA_HOST}
+  EUREKA_PORT: "${EUREKA_PORT}"
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+
+x-mongo-environment: &mongo-environment
+  MONGO_HOST: ${MONGO_HOST}
+  MONGO_PORT: "${MONGO_PORT}"
+  MONGO_USERNAME: ${MONGO_USERNAME}
+  MONGO_PASSWORD: ${MONGO_PASSWORD}
+
+x-health-check: &health-check
+  interval: 10s
+  timeout: 5s
+  retries: 10
+  start_period: 20s
+
 services:
+  # ----------------------------
+  # DATABASE (MongoDB)
+  # ----------------------------
+  mongo:
+    <<: *runtime
+    image: mongo:7
+    command: [mongod, --port, "${MONGO_PORT}"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      <<: *health-check
+      test: [CMD-SHELL, 'mongosh --quiet --port ${MONGO_PORT} --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "quit(db.runCommand({ ping: 1 }).ok ? 0 : 1)"']
+
+  # ----------------------------
+  # OBJECT STORAGE (MinIO)
+  # ----------------------------
+  minio:
+    <<: *runtime
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server /data --address :${MINIO_API_PORT} --console-address :${MINIO_CONSOLE_PORT}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${MINIO_API_PORT}/minio/health/live"]
+
+  # ----------------------------
+  # Kafka
+  # ----------------------------
   kafka:
+    <<: *runtime
     image: apache/kafka:4.3.1
-    container_name: ecom-kafka
     environment:
       # KRaft configuration
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:${KAFKA_CONTROLLER_PORT}
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
 
       # Network configuration
-      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+      KAFKA_LISTENERS: INTERNAL://:${KAFKA_PORT},CONTROLLER://:${KAFKA_CONTROLLER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:${KAFKA_PORT}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
 
@@ -22,180 +85,139 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
 
-      CLUSTER_ID: ${KAFKA_CLUSTER_ID:?Set KAFKA_CLUSTER_ID}
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka-data:/var/lib/kafka
     healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9092", "--list"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 20s
-    restart: unless-stopped
-    networks:
-      - ecom-network
-
-  # ----------------------------
-  # DATABASE (MongoDB)
-  # ----------------------------
-  mongo:
-    image: mongo:7
-    container_name: ecom-mongo
-    command: ["mongod", "--port", "${MONGO_PORT}"]
-    ports:
-      - "${MONGO_PORT}:${MONGO_PORT}"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_USER_DATABASE}
-    volumes:
-      - mongo-data:/data/db
-    healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --port ${MONGO_PORT} -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - ecom-network
-
-  # ----------------------------
-  # OBJECT STORAGE (MinIO)
-  # ----------------------------
-  minio:
-    # Community MinIO build; the upstream image is no longer publicly available.
-    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    container_name: ecom-minio
-    command: server /data --address ":${MINIO_API_PORT}" --console-address ":${MINIO_CONSOLE_PORT}"
-    ports:
-      - "${MINIO_API_PORT}:${MINIO_API_PORT}"
-      - "${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${MINIO_API_PORT}/minio/health/live || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - ecom-network
+      <<: *health-check
+      test: [CMD, /opt/kafka/bin/kafka-topics.sh, --bootstrap-server, "kafka:${KAFKA_PORT}", --list]
 
   # ----------------------------
   # SERVICE DISCOVERY (Eureka)
   # ----------------------------
   discovery-service:
-    image: ${IMAGE_REGISTRY}/ecom-discovery-service:${IMAGE_TAG}
-    container_name: ecom-discovery-service
-    env_file:
-      - ./.env
-    ports:
-      - "${EUREKA_PORT}:${EUREKA_PORT}"
-    restart: unless-stopped
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-discovery-service:${IMAGE_TAG}
+    environment:
+      <<: *eureka-environment
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${EUREKA_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - ecom-network
-
-  # ----------------------------
-  # MEDIA SERVICE
-  # ----------------------------
-  media-service:
-    image: ${IMAGE_REGISTRY}/ecom-media-service:${IMAGE_TAG}
-    container_name: ecom-media-service
-    env_file:
-      - ./.env
-    depends_on:
-      kafka:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      discovery-service:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${MEDIA_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - ecom-network
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${EUREKA_PORT}/actuator/health"]
 
   # ----------------------------
   # USER SERVICE
   # ----------------------------
   user-service:
-    image: ${IMAGE_REGISTRY}/ecom-user-service:${IMAGE_TAG}
-    container_name: ecom-user-service
-    env_file:
-      - ./.env
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-user-service:${IMAGE_TAG}
+    environment:
+      <<: [*eureka-environment, *mongo-environment]
+      USER_SERVICE_PORT: "${USER_SERVICE_PORT}"
+      MONGO_USER_DATABASE: ${MONGO_USER_DATABASE}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
     volumes:
-      - ./backend/keys/private.pem:${JWT_PRIVATE_KEY_PATH}:ro
-      - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
+      - type: bind
+        source: ./backend/keys/private.pem
+        target: ${JWT_PRIVATE_KEY_PATH}
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./backend/keys/public.pem
+        target: ${JWT_PUBLIC_KEY_PATH}
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
-      kafka:
-        condition: service_healthy
       mongo:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - ecom-network
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${USER_SERVICE_PORT}/actuator/health"]
 
   # ----------------------------
   # PRODUCT SERVICE
   # ----------------------------
   product-service:
-    image: ${IMAGE_REGISTRY}/ecom-product-service:${IMAGE_TAG}
-    container_name: ecom-product-service
-    env_file:
-      - ./.env
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-product-service:${IMAGE_TAG}
+    environment:
+      <<: [*eureka-environment, *mongo-environment]
+      PRODUCT_SERVICE_PORT: "${PRODUCT_SERVICE_PORT}"
+      MONGO_PRODUCT_DATABASE: ${MONGO_PRODUCT_DATABASE}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
     depends_on:
-      kafka:
-        condition: service_healthy
       mongo:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - ecom-network
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${PRODUCT_SERVICE_PORT}/actuator/health"]
+
+  # ----------------------------
+  # MEDIA SERVICE
+  # ----------------------------
+  media-service:
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-media-service:${IMAGE_TAG}
+    environment:
+      <<: [*eureka-environment, *mongo-environment]
+      MEDIA_SERVICE_PORT: "${MEDIA_SERVICE_PORT}"
+      MONGO_MEDIA_DATABASE: ${MONGO_MEDIA_DATABASE}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MEDIA_PUBLIC_BASE_URL: https://${APP_DOMAIN}/ecom-media
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${MEDIA_SERVICE_PORT}/actuator/health"]
 
   # ----------------------------
   # API GATEWAY
   # ----------------------------
   gateway-service:
-    image: ${IMAGE_REGISTRY}/ecom-gateway-service:${IMAGE_TAG}
-    container_name: ecom-gateway-service
-    env_file:
-      - ./.env
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-gateway-service:${IMAGE_TAG}
+    environment:
+      <<: *eureka-environment
+      GATEWAY_PORT: "${GATEWAY_PORT}"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN}
     volumes:
-      - ./backend/keys/public.pem:${JWT_PUBLIC_KEY_PATH}:ro
-      - ./backend/certs/gateway.p12:${GATEWAY_SSL_KEY_STORE}:ro
+      - type: bind
+        source: ./backend/keys/public.pem
+        target: ${JWT_PUBLIC_KEY_PATH}
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -205,44 +227,30 @@ services:
         condition: service_healthy
       media-service:
         condition: service_healthy
-    ports:
-      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -kfsS https://localhost:${GATEWAY_PORT}/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - ecom-network
+      <<: *health-check
+      test: [CMD, curl, -fsS, "http://localhost:${GATEWAY_PORT}/actuator/health"]
 
   # ----------------------------
   # FRONTEND (Angular + Nginx)
   # ----------------------------
   frontend:
-    image: ${IMAGE_REGISTRY}/ecom-frontend:${IMAGE_TAG}
-    container_name: ecom-frontend
+    <<: *runtime
+    image: ${GHCR_PREFIX}/ecom-frontend:${IMAGE_TAG}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT}:6100"
     depends_on:
       gateway-service:
         condition: service_healthy
-    ports:
-      - "4200:4200"
-    volumes:
-      - ./backend/certs/gateway.crt:/etc/nginx/certs/gateway.crt:ro
-      - ./backend/certs/gateway.key:/etc/nginx/certs/gateway.key:ro
-    restart: unless-stopped
-    networks:
-      - ecom-network
+    healthcheck:
+      <<: *health-check
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:6100/healthz"]
 
-# ----------------------------
-# NETWORKS & VOLUMES
-# ----------------------------
 networks:
   ecom-network:
     driver: bridge
 
 volumes:
-  kafka-data:
   mongo-data:
   minio-data:
+  kafka-data:

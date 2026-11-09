@@ -19,6 +19,8 @@ backend/certs/*
 target/
 *.jar
 *.war
+.scannerwork/
+__pycache__/
 
 # Logs
 *.log
@@ -29,3 +31,7 @@ Thumbs.db
 
 # Uploads
 uploads/
+
+# Deployment state
+.deploy/
+.deploy-env-*
